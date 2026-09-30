@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# İndeks `python main.py ingest` ile yeniden üretilir.
+data/*.db
+.DS_Store

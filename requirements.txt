@@ -1,0 +1,5 @@
+# pip kullananlar için (önerilen yol: uv sync). Kod SDK 2.x oturum API'sini kullanır.
+foundry-local-sdk==2.1.0
+numpy==2.5.3
+streamlit==1.64.0
+pytest==9.1.1
