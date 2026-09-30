@@ -57,8 +57,8 @@ def render_sources(answer: Answer, show_all: bool) -> None:
 
 
 st.title("🏛️ Miras")
-st.caption("Türkiye'nin UNESCO Dünya Mirası alanları hakkında, tamamen bu bilgisayarda çalışan "
-           "soru-cevap asistanı. Microsoft Foundry Local + RAG — internet bağlantısı gerekmez.")
+st.caption("Türkiye'nin UNESCO Dünya Mirası alanları hakkında bilgi veren soru-cevap asistanı. "
+           "Microsoft Foundry Local + RAG")
 
 try:
     assistant = load_assistant()
@@ -69,7 +69,7 @@ except (BackendError, IndexError_) as err:
 
 with st.sidebar:
     st.subheader("Sistem")
-    st.markdown(f"- Sohbet modeli: `{SETTINGS.chat_model}` ({SETTINGS.chat_device})\n- Embedding: `{SETTINGS.embed_model}`\n"
+    st.markdown(f"- Sohbet modeli: `{SETTINGS.chat_model}`\n- Embedding: `{SETTINGS.embed_model}`\n"
                 f"- Parça sayısı: {len(assistant.retriever.chunks)}\n- top_k: {SETTINGS.top_k}, "
                 f"eşik: {SETTINGS.min_similarity}")
     show_all = st.toggle("Getirilen tüm parçaları göster", value=False)
