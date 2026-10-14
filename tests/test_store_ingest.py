@@ -93,7 +93,28 @@ def test_title_mention_boosts_ranking_but_not_gate_score(store, backend):
     assert {h.chunk.id: h.score for h in plain} == {h.chunk.id: h.score for h in boosted}
 
 
+def test_aliases_and_ascii_spellings_get_title_boost(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+
+    def boosted(query):
+        return {c.filename for c, b in zip(retriever.chunks, retriever._title_bonus(query)) if b}
+
+    assert boosted("Ephesos'ta hangi yapılar var?") == {"efes.md"}
+    assert boosted("Gobeklitepe nerede?") == {"gobeklitepe.md"}
+    assert boosted("EPHESUS ve Göbeklitepe") == {"efes.md", "gobeklitepe.md"}
+    assert boosted("Ephesoslu bir filozof") == set()
+
+
 def test_title_key_is_first_word():
     from miras.retrieval import title_key
     assert title_key("Divriği Ulu Camii ve Darüşşifası") == "divriği"
     assert title_key("İznik") == "iznik"
+
+
+def test_title_keys_include_aliases_and_ascii_forms():
+    from miras.retrieval import title_keys
+    assert title_keys("Troya", ("Truva", "İlion")) == {"troya", "truva", "ilion"}
+    assert title_keys("Göbeklitepe", ("Göbekli Tepe",)) == {
+        "göbeklitepe", "gobeklitepe", "göbekli tepe", "gobekli tepe"}
+    # Sorgu katlanmaz: Türkçe "anı" kelimesi "Ani" alanına eşleşmez.
+    assert "anı" not in title_keys("Ani")

@@ -28,9 +28,22 @@ def _fold(text: str) -> str:
     return text.replace("İ", "i").replace("I", "ı").lower()
 
 
+_ASCII = str.maketrans("çğıöşüâîû", "cgiosuaiu")
+
+
 def title_key(title: str) -> str:
     """"Divriği Ulu Camii ve Darüşşifası" -> "divriği"; kullanıcılar alanı çoğunlukla ilk kelimesiyle anar."""
     return _fold(title).split()[0]
+
+
+def title_keys(title: str, aliases: tuple[str, ...] = ()) -> set[str]:
+    """Bir alanı anan tüm biçimler: başlığın ilk kelimesi ve takma adlar.
+
+    Her ad Türkçe karaktersiz haliyle de eklenir ("gobeklitepe"). Sorgunun kendisi
+    katlanmaz; böylece "anı" gibi Türkçe kelimeler "Ani"ye eşleşmez.
+    """
+    names = [title_key(title)] + [_fold(a) for a in aliases]
+    return {form for name in names for form in (name, name.translate(_ASCII))}
 
 
 class Retriever:
@@ -50,7 +63,7 @@ class Retriever:
                 f"İndeks '{indexed_with}' ile oluşturulmuş, şu anki model '{embed_model}'. "
                 "`python main.py ingest --rebuild` çalıştırın.")
         titles = [c.title for c in self.chunks]
-        self._title_keys = {t: title_key(t) for t in set(titles)}
+        self._title_keys = {c.title: title_keys(c.title, c.aliases) for c in self.chunks}
         self._titles = np.array(titles, dtype=object)
 
     def _title_bonus(self, query: str) -> np.ndarray:
@@ -59,11 +72,12 @@ class Retriever:
         "Ani" gibi kısa adlar embedding'de zayıf temsil ediliyor; bu, sorunun hangi
         alanla ilgili olduğunu açıkça söylediği durumda sıralamayı düzeltir. Özel
         isimlere ek kesme işaretiyle geldiği için ("Ani'deki") ad sonrası harf gelmesi
-        eşleşme sayılmaz; böylece "aniden" gibi kelimeler "Ani"yi tetiklemez.
+        eşleşme sayılmaz; böylece "aniden" gibi kelimeler "Ani"yi tetiklemez. Takma adlar
+        ("Truva" -> Troya) ve Türkçe karaktersiz yazımlar ("Gobeklitepe") da eşleşir.
         """
         folded = _fold(query)
-        matched = {title for title, key in self._title_keys.items()
-                   if re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded)}
+        matched = {title for title, keys in self._title_keys.items()
+                   if any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded) for key in keys)}
         return np.where(np.isin(self._titles, list(matched)), TITLE_BOOST, 0.0)
 
     def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "") -> list[Hit]:
