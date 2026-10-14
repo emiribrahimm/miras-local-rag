@@ -1,5 +1,6 @@
 ---
 title: Efes
+aliases: Ephesos, Ephesus
 source: https://tr.wikipedia.org/wiki/Efes
 revision: 37717008 (2026-08-08T16:08:20Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)

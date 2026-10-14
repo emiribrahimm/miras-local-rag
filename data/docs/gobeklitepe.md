@@ -1,5 +1,6 @@
 ---
 title: Göbeklitepe
+aliases: Göbekli Tepe
 source: https://tr.wikipedia.org/wiki/G%C3%B6beklitepe
 revision: 37812627 (2026-08-21T19:56:37Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)

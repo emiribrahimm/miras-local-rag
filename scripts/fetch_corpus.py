@@ -36,6 +36,17 @@ ARTICLES = {
     "pamukkale": "Pamukkale",
 }
 
+# dosya adı -> alanın başka adları (başlık eşleştirmesinde kullanılır)
+ALIASES = {
+    "troya": "Truva, Troia, İlion",
+    "efes": "Ephesos, Ephesus",
+    "hattusa": "Hattuşaş, Hattusas",
+    "gobeklitepe": "Göbekli Tepe",
+    "catalhoyuk": "Çatal Höyük",
+    "afrodisias": "Aphrodisias",
+    "pamukkale": "Hierapolis",
+}
+
 # Soru-cevap için bilgi taşımayan bölümler atılır.
 SKIP_SECTIONS = {
     "kaynakça", "dış bağlantılar", "ayrıca bakınız", "notlar", "galeri",
@@ -98,7 +109,8 @@ def main() -> None:
         header = (
             "---\n"
             f"title: {page['title']}\n"
-            f"source: {url}\n"
+            + (f"aliases: {ALIASES[slug]}\n" if slug in ALIASES else "")
+            + f"source: {url}\n"
             f"revision: {rev['revid']} ({rev['timestamp']})\n"
             "license: CC BY-SA 4.0 (Vikipedi katkıcıları)\n"
             "---\n\n"

@@ -1,5 +1,6 @@
 ---
 title: Troya
+aliases: Truva, Troia, İlion
 source: https://tr.wikipedia.org/wiki/Troya
 revision: 37703249 (2026-08-07T07:16:30Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)

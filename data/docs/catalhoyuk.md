@@ -1,5 +1,6 @@
 ---
 title: Çatalhöyük
+aliases: Çatal Höyük
 source: https://tr.wikipedia.org/wiki/%C3%87atalh%C3%B6y%C3%BCk
 revision: 37705679 (2026-08-07T19:50:23Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)

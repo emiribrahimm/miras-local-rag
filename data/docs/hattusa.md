@@ -1,5 +1,6 @@
 ---
 title: Hattuşa
+aliases: Hattuşaş, Hattusas
 source: https://tr.wikipedia.org/wiki/Hattu%C5%9Fa
 revision: 37705855 (2026-08-07T20:20:28Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)

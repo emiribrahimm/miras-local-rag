@@ -1,5 +1,6 @@
 ---
 title: Afrodisias
+aliases: Aphrodisias
 source: https://tr.wikipedia.org/wiki/Afrodisias
 revision: 38058220 (2026-09-24T15:08:56Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)

@@ -131,6 +131,17 @@ Kendi dokümanlarınızı kullanmak için dosyaları `data/docs/` klasörüne ko
 yeterli. Bu durumda `calibrate` ile eşiği yeniden ölçmeniz ve sistem prompt'undaki konu tanımını
 (`miras/prompts.py`) güncellemeniz önerilir.
 
+Dosyanın başına isteğe bağlı bir üst bilgi eklenebilir. `aliases` alanındaki adlar, soruda
+geçtiğinde o dokümanın parçalarını öne çıkarır (bkz. [tasarım kararı 7](#tasarım-kararları)):
+
+```
+---
+title: Troya
+aliases: Truva, Troia, İlion
+source: https://tr.wikipedia.org/wiki/Troya
+---
+```
+
 ## Bilgi tabanı
 
 `data/docs/` klasöründe 12 Türkçe Vikipedi maddesi var:
@@ -238,6 +249,9 @@ Bu yüzden eşik `dev` sorularından seçilip `test` sorularında doğrulandı.
   edildi?"* sorusunda ilk 4 parçanın hiçbiri Ani'ye ait değildi.
 - *Çözüm:* Soruda bir alanın adı geçiyorsa (`Ani'deki`, `Efes'e`) o dokümanın parçalarına
   sıralamada +0.1 puan veriliyor.
+- Ad olarak başlığın ilk kelimesi ve dosya başındaki `aliases` alanı kullanılır (`Truva` → Troya,
+  `Ephesos` → Efes, `Hierapolis` → Pamukkale). Türkçe karaktersiz yazımlar da eşleşir
+  (`Gobeklitepe`, `Catalhoyuk`); sorgu katlanmadığı için `anı` kelimesi `Ani`yi tetiklemez.
 - Eşik kontrolü ham benzerlikle yapıldığı için kalibrasyon bundan etkilenmiyor.
 
 **8. SQLite + NumPy**
@@ -253,7 +267,7 @@ olarak verilir ve sistem prompt'u içlerindeki talimatların uygulanmamasını s
 tam koruma değildir.
 
 **10. Model gerektirmeyen testler.** `FakeBackend` kelime özetlerinden vektör üretir ve sabit cevap
-döndürür. Böylece 29 test (parçalama, SQLite, artımlı ingest, arama, reddetme, atıf temizleme,
+döndürür. Böylece 33 test (parçalama, SQLite, artımlı ingest, arama, reddetme, atıf temizleme,
 değerlendirme metrikleri ve Streamlit arayüzü) model indirmeden yaklaşık 1 saniyede çalışır.
 
 ## Sınırlamalar
@@ -264,8 +278,9 @@ değerlendirme metrikleri ve Streamlit arayüzü) model indirmeden yaklaşık 1 
     (`--device gpu` / `MIRAS_CHAT_DEVICE=gpu`), ancak **test edilmedi** ve ölçülmedi.
 - **Tek turlu soru-cevap.** Önceki sorulara referans veren takip soruları (*"peki orası ne zaman
   keşfedildi?"*) desteklenmiyor.
-- **Başlık eşleştirme basit.** Yalnızca başlığın ilk kelimesine bakıyor; *"Truva"* yazılırsa
-  (dosyadaki ad *"Troya"*) eşleşmez. Bu durumda yalnızca embedding benzerliği kullanılır.
+- **Başlık eşleştirme sözlüğe dayalı.** Başlığın ilk kelimesi ve elle yazılmış takma adlar
+  tanınır; listede olmayan bir ad ya da yazım hatası (*"Göbeklitpe"*) eşleşmez. Bu durumda yalnızca
+  embedding benzerliği kullanılır.
 - **Vikipedi içeriği hatasız değil.** Asistan dokümanda yazanı aktarır; dokümandaki bir hata cevaba
   da yansır. Kullanılan revizyonlar dosya başlıklarında kayıtlı.
 - **Arayüzden dosya yüklenemiyor.** Yeni doküman eklemek için `data/docs/` klasörüne koyup

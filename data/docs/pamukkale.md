@@ -1,5 +1,6 @@
 ---
 title: Pamukkale
+aliases: Hierapolis
 source: https://tr.wikipedia.org/wiki/Pamukkale
 revision: 37435488 (2026-07-05T12:34:49Z)
 license: CC BY-SA 4.0 (Vikipedi katkıcıları)
