@@ -8,6 +8,8 @@ I built it as my project for the Microsoft AI Summer Internship ("Local RAG AI A
 Microsoft Foundry Local"). The knowledge base is 12 Turkish Wikipedia articles, so questions and
 answers are in Turkish.
 
+[Türkçe için aşağı kaydırın](#türkçe)
+
 ```
 Soru> Göbeklitepe hangi yıl UNESCO Dünya Mirası kalıcı listesine girdi?
 Göbeklitepe 2018'de UNESCO Dünya Mirası kalıcı listesine girdi [K1].
@@ -115,3 +117,111 @@ based, so it says more about this kind of question than about the system in gene
 - The articles in `data/docs/` come from [Turkish Wikipedia](https://tr.wikipedia.org) and are
   shared under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Each file has its
   source URL and revision number at the top.
+
+---
+
+## Türkçe
+
+Miras, Türkiye'deki UNESCO Dünya Mirası alanları hakkındaki Türkçe soruları cevaplayan küçük bir
+RAG asistanı. Her şey Microsoft Foundry Local ile bilgisayarın kendisinde çalışıyor; modeller bir
+kez indirildikten sonra internete ya da API anahtarına gerek yok.
+
+Microsoft AI Summer Internship kapsamındaki "Local RAG AI Assistant with Microsoft Foundry Local"
+projesi için yaptım. Bilgi tabanı 12 Türkçe Vikipedi maddesinden oluşuyor.
+
+### Nasıl çalışıyor
+
+`data/docs/` altındaki dosyalar başlıklarına göre parçalanıyor. Her parça hangi başlığın altında
+olduğunu da taşıyor (`Selimiye Camii › Tarihçe` gibi), böylece "Tarihçe" diye genel bir bölüm bile
+hangi alana ait olduğunu kaybetmiyor. Parçalar `qwen3-embedding-0.6b` ile gömülüp tek bir SQLite
+dosyasına yazılıyor. Soru gelince en benzer 4 parça bulunuyor ve `[K1]..[K4]` etiketleriyle
+`qwen2.5-7b`'ye veriliyor.
+
+Hatalara bakarak sonradan eklediğim birkaç şey:
+
+- En iyi parçanın benzerliği eşiğin (0.53) altındaysa model hiç çağrılmıyor, direkt "bilmiyorum"
+  deniyor. Konu dışı sorular modele hiç ulaşmıyor. Eşiği elle seçmedim, `calibrate` ile ölçtüm.
+- Model sadece `[K1]` gibi etiket yazıyor; kaynak listesini uygulama veritabanından çıkarıyor.
+  Getirilmemiş bir parçaya işaret eden etiket metinden siliniyor, yani kaynak uyduramıyor.
+- "Ani" gibi kısa adlar embedding'de iyi temsil edilmiyor. Soruda bir alanın adı ya da takma adı
+  geçiyorsa (`Truva`, `Ephesos`) o alanın parçaları biraz öne alınıyor. "Gobeklitepe" gibi Türkçe
+  karaktersiz yazımlar da tanınıyor.
+
+### Kurulum
+
+Python 3.12 ve [uv](https://docs.astral.sh/uv/) lazım. Modeller için yaklaşık 7 GB disk, rahat
+çalışması için 16 GB RAM öneririm. İnternet sadece ilk çalıştırmada modelleri indirmek için
+gerekiyor. pip kullanmak isteyen için `requirements.txt` de var. Foundry Local CLI'ı ayrıca kurmaya
+gerek yok, `foundry-local-sdk` paketi çalışma zamanını içinde getiriyor.
+
+```bash
+git clone https://github.com/emiribrahimm/miras-local-rag.git
+cd miras-local-rag
+uv sync
+uv run python main.py ingest
+```
+
+Modeller `~/.miras-rag/cache/models/` altına iniyor. 240 parçanın indekslenmesi benim makinemde
+(Apple M5 Pro) 100 saniye kadar sürdü. Sadece macOS'ta denedim. Windows'ta Foundry Local'in
+`foundry-local-sdk-winml` paketiyle kullanılması gerekiyormuş, onu test etmedim.
+
+### Kullanım
+
+```bash
+uv run streamlit run app.py                 # web arayüzü
+
+uv run python main.py chat                  # sohbet, çıkmak için "çık"
+uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
+uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de gösterir
+uv run python main.py ingest --rebuild
+uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
+uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
+uv run pytest                               # model gerekmez, ~1 sn
+```
+
+Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
+`MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
+`ingest --rebuild` çalıştırmak gerekiyor.
+
+Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
+`ingest` çalıştırmanız yeterli, sadece değişen dosyalar yeniden işleniyor. Sonrasında `calibrate`
+ile eşiği tekrar ölçmek ve `miras/prompts.py` içindeki konu tanımını güncellemek iyi olur. Dosyanın
+başına başlık ve takma adlar için şöyle bir üst bilgi eklenebilir:
+
+```
+---
+title: Troya
+aliases: Truva, Troia, İlion
+source: https://tr.wikipedia.org/wiki/Troya
+---
+```
+
+### Sonuçlar
+
+`data/eval/questions.json` içinde 44 soru var: 26'sı dokümanlardan cevaplanabilir, 10'u konuyla
+ilgili ama dokümanlarda yok (reddedilmeli), 8'i tamamen konu dışı. Sorular `dev` ve `test` olarak
+ikiye ayrılmış durumda; eşiği ve prompt'u ayarlarken sadece `dev` sorularına baktım.
+
+CPU'da `qwen2.5-7b` ile 44/44 aldı (test kısmında 22/22), atıfların hepsi doğru dokümana gidiyordu.
+Model çağrılan sorularda ortanca süre 14 saniye civarı. Soru soru cevapların olduğu rapor
+[`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-7b-cpu.md) dosyasında.
+
+Bu sonucu fazla büyütmemek lazım: set küçük, soruları ben yazdım ve puanlama anahtar kelimeye
+dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğru cevap vereceğini değil.
+
+### Eksikler
+
+- Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor.
+  GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
+- Takip sorusu desteklenmiyor, her soru tek başına cevaplanıyor.
+- Ad eşleştirme sözlüğe dayalı. "Göbeklitpe" gibi bir yazım hatasında sadece embedding araması kalıyor.
+- Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
+- Arayüzden dosya yüklenemiyor, şimdilik klasöre koymak gerekiyor.
+
+### Kaynaklar ve lisans
+
+- [Building Your First Local RAG Application with Foundry Local](https://techcommunity.microsoft.com/blog/azuredevcommunityblog/building-your-first-local-rag-application-with-foundry-local/4501968) (Microsoft Tech Community)
+- [Foundry Local belgeleri](https://learn.microsoft.com/azure/ai-foundry/foundry-local/)
+- `data/docs/` içindeki maddeler [Türkçe Vikipedi](https://tr.wikipedia.org) katkıcılarına ait ve
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) lisansıyla paylaşılıyor. Her
+  dosyanın başında kaynak adresi ve revizyon numarası var.
