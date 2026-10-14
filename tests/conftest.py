@@ -13,7 +13,7 @@ DOCS = {
     "gobeklitepe.md": "---\ntitle: Göbeklitepe\nsource: https://example.org/g\n---\n\n# Göbeklitepe\n\n"
                       "Göbeklitepe Şanlıurfa ilinde yer alan Neolitik bir arkeolojik alandır.\n\n"
                       "## Koruma\n\nGöbeklitepe 2018 yılında Dünya Mirası listesine girdi.\n",
-    "efes.md": "# Efes\n\nEfes İzmir ilinin Selçuk ilçesinde bulunan antik bir kenttir.\n",
+    "efes.md": "---\ntitle: Efes\naliases: Ephesos, Ephesus\n---\n\n# Efes\n\nEfes İzmir ilinin Selçuk ilçesinde bulunan antik bir kenttir.\n",
 }
 
 

@@ -49,7 +49,8 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
         on_progress(f"{path.name}: {len(chunks)} parça gömülüyor...")
         embeddings = backend.embed_documents([c.embedding_text for c in chunks])
         store.add_document(path.name, doc.title, doc.source_url, fingerprint,
-                           [c.section for c in chunks], [c.text for c in chunks], embeddings)
+                           [c.section for c in chunks], [c.text for c in chunks], embeddings,
+                           doc.aliases)
         report.added.append(path.name)
         report.chunks_embedded += len(chunks)
 

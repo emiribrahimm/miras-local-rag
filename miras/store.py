@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS documents (
     filename    TEXT NOT NULL UNIQUE,
     title       TEXT NOT NULL,
     source_url  TEXT NOT NULL,
-    fingerprint TEXT NOT NULL          -- içerik + parçalama ayarlarının özeti
+    fingerprint TEXT NOT NULL,         -- içerik + parçalama ayarlarının özeti
+    aliases     TEXT NOT NULL DEFAULT ''  -- alanın başka adları, virgülle ayrılmış
 );
 CREATE TABLE IF NOT EXISTS chunks (
     id        INTEGER PRIMARY KEY,
@@ -36,6 +37,7 @@ class StoredChunk:
     source_url: str
     section: str
     text: str
+    aliases: tuple[str, ...] = ()
 
 
 class Store:
@@ -45,6 +47,11 @@ class Store:
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        # Takma adlardan önce oluşturulmuş veritabanlarına kolon eklenir.
+        columns = {row[1] for row in self.conn.execute("PRAGMA table_info(documents)")}
+        if "aliases" not in columns:
+            self.conn.execute("ALTER TABLE documents ADD COLUMN aliases TEXT NOT NULL DEFAULT ''")
+            self.conn.commit()
 
     def close(self) -> None:
         self.conn.close()
@@ -72,12 +79,14 @@ class Store:
         self.conn.commit()
 
     def add_document(self, filename: str, title: str, source_url: str, fingerprint: str,
-                     sections: list[str], texts: list[str], embeddings: np.ndarray) -> None:
+                     sections: list[str], texts: list[str], embeddings: np.ndarray,
+                     aliases: tuple[str, ...] = ()) -> None:
         with self.conn:  # tek işlem: yarım kalmış doküman oluşmaz
             self.conn.execute("DELETE FROM documents WHERE filename = ?", (filename,))
             doc_id = self.conn.execute(
-                "INSERT INTO documents(filename, title, source_url, fingerprint) VALUES(?, ?, ?, ?)",
-                (filename, title, source_url, fingerprint)).lastrowid
+                "INSERT INTO documents(filename, title, source_url, fingerprint, aliases) "
+                "VALUES(?, ?, ?, ?, ?)",
+                (filename, title, source_url, fingerprint, ", ".join(aliases))).lastrowid
             self.conn.executemany(
                 "INSERT INTO chunks(doc_id, position, section, text, embedding) VALUES(?, ?, ?, ?, ?)",
                 [(doc_id, i, sections[i], texts[i], embeddings[i].astype(np.float32).tobytes())
@@ -91,10 +100,12 @@ class Store:
 
     def load_all(self) -> tuple[list[StoredChunk], np.ndarray]:
         rows = self.conn.execute(
-            "SELECT c.id, d.filename, d.title, d.source_url, c.section, c.text, c.embedding "
-            "FROM chunks c JOIN documents d ON d.id = c.doc_id ORDER BY d.filename, c.position"
+            "SELECT c.id, d.filename, d.title, d.source_url, c.section, c.text, d.aliases, "
+            "c.embedding FROM chunks c JOIN documents d ON d.id = c.doc_id "
+            "ORDER BY d.filename, c.position"
         ).fetchall()
-        chunks = [StoredChunk(*row[:6]) for row in rows]
+        chunks = [StoredChunk(*row[:6], tuple(a.strip() for a in row[6].split(",") if a.strip()))
+                  for row in rows]
         if not rows:
             return chunks, np.zeros((0, 0), dtype=np.float32)
-        return chunks, np.stack([np.frombuffer(row[6], dtype=np.float32) for row in rows])
+        return chunks, np.stack([np.frombuffer(row[7], dtype=np.float32) for row in rows])

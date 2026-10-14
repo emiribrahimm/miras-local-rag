@@ -8,7 +8,13 @@ def test_front_matter_is_parsed():
 
 
 def test_missing_front_matter_uses_fallback_title():
-    assert parse_document("Sadece metin.", "dosya-adi").title == "dosya-adi"
+    doc = parse_document("Sadece metin.", "dosya-adi")
+    assert doc.title == "dosya-adi" and doc.aliases == ()
+
+
+def test_aliases_are_split_on_commas():
+    doc = parse_document("---\ntitle: Troya\naliases: Truva,  Troia , ,İlion\n---\n\nMetin.", "yedek")
+    assert doc.aliases == ("Truva", "Troia", "İlion")
 
 
 def test_sections_are_kept_separate_with_heading_path():

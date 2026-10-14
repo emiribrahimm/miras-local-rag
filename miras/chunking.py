@@ -11,6 +11,8 @@ class Document:
     title: str
     source_url: str
     body: str
+    # Alanın başka adları ("Truva", "Ephesos"); başlık eşleştirmesinde kullanılır.
+    aliases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -25,7 +27,7 @@ class Chunk:
 
 
 def parse_document(raw: str, fallback_title: str) -> Document:
-    """Baştaki '---' ile çevrili üst bilgiyi (title, source) ayırır."""
+    """Baştaki '---' ile çevrili üst bilgiyi (title, source, aliases) ayırır."""
     meta: dict[str, str] = {}
     body = raw
     match = re.match(r"---\n(.*?)\n---\n", raw, flags=re.DOTALL)
@@ -37,7 +39,8 @@ def parse_document(raw: str, fallback_title: str) -> Document:
     # Üst bilgi yoksa başlık ilk '# ...' satırından, o da yoksa dosya adından alınır.
     h1 = re.search(r"^#\s+(.+)$", body, flags=re.MULTILINE)
     title = meta.get("title") or (h1.group(1).strip() if h1 else fallback_title)
-    return Document(title, meta.get("source", ""), body.strip())
+    aliases = tuple(a.strip() for a in meta.get("aliases", "").split(",") if a.strip())
+    return Document(title, meta.get("source", ""), body.strip(), aliases)
 
 
 def _split_long(paragraph: str, max_chars: int) -> list[str]:

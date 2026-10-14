@@ -15,6 +15,23 @@ def test_ingest_stores_chunks_and_normalized_vectors(store):
     assert matrix.dtype == np.float32 and matrix.shape == (3, FakeBackend.DIM)
     assert np.allclose(np.linalg.norm(matrix, axis=1), 1.0, atol=1e-5)
     assert chunks[-1].source_url == "https://example.org/g"
+    assert chunks[0].aliases == ("Ephesos", "Ephesus") and chunks[-1].aliases == ()
+
+
+def test_old_database_without_aliases_column_is_migrated(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "eski.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE documents (id INTEGER PRIMARY KEY, filename TEXT NOT NULL UNIQUE, "
+                 "title TEXT NOT NULL, source_url TEXT NOT NULL, fingerprint TEXT NOT NULL)")
+    conn.execute("INSERT INTO documents(filename, title, source_url, fingerprint) "
+                 "VALUES('efes.md', 'Efes', '', 'x')")
+    conn.commit()
+    conn.close()
+    store = Store(path)
+    assert store.fingerprints() == {"efes.md": "x"}
+    assert store.conn.execute("SELECT aliases FROM documents").fetchone() == ("",)
 
 
 def test_second_ingest_skips_unchanged_files(store, backend, settings):
