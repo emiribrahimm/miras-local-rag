@@ -35,7 +35,8 @@ A few things I added after looking at where it went wrong:
 - The model only writes `[K1]`-style tags. The source list comes from the database, and tags
   pointing at chunks that weren't retrieved get dropped, so it can't invent a source.
 - Short names like "Ani" embed poorly, so if a site's name or alias shows up in the question its
-  chunks get a small boost. Spellings without Turkish characters work too ("Gobeklitepe").
+  chunks get a small boost. Spellings without Turkish characters work too ("Gobeklitepe"), and
+  so do one-letter typos in longer names ("Göbeklitpe", "Selimye").
 
 The design notes from the start of the project are in `docs/superpowers/specs/`.
 
@@ -106,7 +107,8 @@ based, so it says more about this kind of question than about the system in gene
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit. There's a GPU option
   (`--device gpu` or `MIRAS_CHAT_DEVICE=gpu`) but I haven't tested or measured it.
 - No follow-up questions, every question is answered on its own.
-- Name matching is dictionary based. A typo like "Göbeklitpe" falls back to plain embedding search.
+- Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
+  bigger typos like "Gbeklitpe" fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/`.
 - You can't upload files from the UI yet.
 
@@ -145,7 +147,7 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   Getirilmemiş bir parçaya işaret eden etiket metinden siliniyor, yani kaynak uyduramıyor.
 - "Ani" gibi kısa adlar embedding'de iyi temsil edilmiyor. Soruda bir alanın adı ya da takma adı
   geçiyorsa (`Truva`, `Ephesos`) o alanın parçaları biraz öne alınıyor. "Gobeklitepe" gibi Türkçe
-  karaktersiz yazımlar da tanınıyor.
+  karaktersiz yazımlar ve uzun adlardaki tek harflik hatalar ("Göbeklitpe", "Selimye") da tanınıyor.
 
 ### Kurulum
 
@@ -214,7 +216,8 @@ dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğ
 - Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor.
   GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
 - Takip sorusu desteklenmiyor, her soru tek başına cevaplanıyor.
-- Ad eşleştirme sözlüğe dayalı. "Göbeklitpe" gibi bir yazım hatasında sadece embedding araması kalıyor.
+- Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
+  gibi daha büyük hatalarda sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
 - Arayüzden dosya yüklenemiyor, şimdilik klasöre koymak gerekiyor.
 
