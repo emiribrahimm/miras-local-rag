@@ -46,6 +46,37 @@ def title_keys(title: str, aliases: tuple[str, ...] = ()) -> set[str]:
     return {form for name in names for form in (name, name.translate(_ASCII))}
 
 
+# Yazım hatası toleransı bu uzunluktan kısa adlara uygulanmaz: "Ani" -> "anı",
+# "İlion" -> "ilin" gibi gündelik kelimelerle karışır.
+FUZZY_MIN_CHARS = 6
+
+
+def edit_distance(a: str, b: str) -> int:
+    """Ekleme, silme, değiştirme ve yan yana iki harfin yer değiştirmesi birer adım sayılır."""
+    prev2: list[int] = []
+    prev = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        cur = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = a[i - 1] != b[j - 1]
+            cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                cur[j] = min(cur[j], prev2[j - 2] + 1)
+        prev2, prev = prev, cur
+    return prev[-1]
+
+
+def fuzzy_mentions(words: list[str], key: str) -> bool:
+    """Sorgudaki kelimelerden biri (çok kelimeli adlarda ardışık kelimeler) ada en fazla
+    bir harf uzaklıktaysa doğru: "göbeklitpe", "selimye", "gobekli tpe"."""
+    key = key.translate(_ASCII)
+    if len(key) < FUZZY_MIN_CHARS:
+        return False
+    n = len(key.split())
+    return any(edit_distance(" ".join(words[i:i + n]), key) <= 1
+               for i in range(len(words) - n + 1))
+
+
 class Retriever:
     """Vektörleri bir kez belleğe alır; her sorgu tek bir matris çarpımıdır.
 
@@ -74,10 +105,13 @@ class Retriever:
         isimlere ek kesme işaretiyle geldiği için ("Ani'deki") ad sonrası harf gelmesi
         eşleşme sayılmaz; böylece "aniden" gibi kelimeler "Ani"yi tetiklemez. Takma adlar
         ("Truva" -> Troya) ve Türkçe karaktersiz yazımlar ("Gobeklitepe") da eşleşir.
+        Birebir eşleşmeyen uzun adlarda tek harflik yazım hataları da kabul edilir.
         """
         folded = _fold(query)
+        words = re.findall(r"\w+", folded.translate(_ASCII))
         matched = {title for title, keys in self._title_keys.items()
-                   if any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded) for key in keys)}
+                   if any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded) for key in keys)
+                   or any(fuzzy_mentions(words, key) for key in keys)}
         return np.where(np.isin(self._titles, list(matched)), TITLE_BOOST, 0.0)
 
     def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "") -> list[Hit]:

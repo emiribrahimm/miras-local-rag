@@ -118,3 +118,30 @@ def test_title_keys_include_aliases_and_ascii_forms():
         "göbeklitepe", "gobeklitepe", "göbekli tepe", "gobekli tepe"}
     # Sorgu katlanmaz: Türkçe "anı" kelimesi "Ani" alanına eşleşmez.
     assert "anı" not in title_keys("Ani")
+
+
+def test_typos_in_long_names_still_get_title_boost(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+
+    def boosted(query):
+        return {c.filename for c, b in zip(retriever.chunks, retriever._title_bonus(query)) if b}
+
+    assert boosted("Göbeklitpe nerede?") == {"gobeklitepe.md"}
+    assert boosted("Gobeklitpe'de ne var?") == {"gobeklitepe.md"}
+    assert boosted("GÖBEKLİTEPPE hangi ilde?") == {"gobeklitepe.md"}
+    assert boosted("Epheuss nerede?") == {"efes.md"}  # yan yana harf takası
+    # Kısa adlarda tolerans yok; iki harf hata da eşleşmez.
+    assert boosted("Efs nerede?") == set()
+    assert boosted("Gbeklitpe nerede?") == set()
+
+
+def test_edit_distance_and_short_names():
+    from miras.retrieval import edit_distance, fuzzy_mentions
+    assert edit_distance("selimiye", "selimiye") == 0
+    assert edit_distance("selimye", "selimiye") == 1
+    assert edit_distance("seilmiye", "selimiye") == 1
+    assert edit_distance("gbeklitpe", "gobeklitepe") == 2
+    assert fuzzy_mentions(["hatusa", "nerede"], "hattuşa")
+    assert fuzzy_mentions(["gobekli", "tpe", "nerede"], "göbekli tepe")  # çok kelimeli ad
+    assert not fuzzy_mentions(["ilin", "merkezi"], "ilion")
+    assert not fuzzy_mentions(["ana"], "ani")
