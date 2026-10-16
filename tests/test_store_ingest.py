@@ -150,3 +150,29 @@ def test_edit_distance_and_short_names():
     assert fuzzy_mentions(["gobekli", "tpe", "nerede"], "göbekli tepe")  # çok kelimeli ad
     assert not fuzzy_mentions(["ilin", "merkezi"], "ilion")
     assert not fuzzy_mentions(["ana"], "ani")
+
+
+def test_save_uploads_writes_valid_files_and_reports_errors(tmp_path):
+    from miras.ingest import save_uploads
+    docs = tmp_path / "docs"
+    saved, errors = save_uploads(docs, [
+        ("ani.md", "---\ntitle: Ani\n---\n\nAni Kars'tadır.".encode()),
+        ("../../kaçak.txt", "\ufeffMetin".encode()),
+        ("resim.png", b"x"),
+        (".gizli.md", b"x"),
+        ("bos.md", b"  \n"),
+        ("latin1.md", "Kars ilçesi".encode("latin-1")),
+    ])
+    assert saved == ["ani.md", "kaçak.txt"]
+    assert sorted(p.name for p in docs.iterdir()) == ["ani.md", "kaçak.txt"]
+    assert not (tmp_path / "kaçak.txt").exists()
+    assert (docs / "kaçak.txt").read_text(encoding="utf-8") == "Metin"  # BOM atılır
+    assert [e.split(":")[0] for e in errors] == ["resim.png", ".gizli.md", "bos.md", "latin1.md"]
+
+
+def test_uploaded_file_is_picked_up_by_ingest(store, backend, settings):
+    from miras.ingest import save_uploads
+    save_uploads(settings.docs_dir, [("ani.md", "---\ntitle: Ani\n---\n\nAni Kars'tadır.".encode())])
+    report = ingest(store, backend, settings)
+    assert report.added == ["ani.md"] and len(report.unchanged) == 2
+    assert "Ani" in {c.title for c in Retriever(store, backend.embed_model).chunks}
