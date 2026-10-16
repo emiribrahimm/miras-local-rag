@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import statistics
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -178,6 +179,71 @@ def answer_summary(rows: list[AnswerRow]) -> dict:
         "max_seconds": round(max(r.seconds for r in rows), 2),
     }
 
+
+
+# --- takip soruları --------------------------------------------------------
+# data/eval/followups.json: iki turluk sohbetler, yalnızca son tur puanlanır. Son soru
+# ayrıca bağlamsız aranır; böylece konuyu taşımanın aramaya etkisi görülür.
+
+@dataclass
+class FollowupRow:
+    id: str
+    type: str
+    turns: list[str]
+    answer: str
+    refused: bool
+    refusal_reason: str | None
+    passed: bool
+    cited_expected_doc: bool | None
+    carried: list[str]                 # önceki turdan taşınan alanlar
+    doc_rank: int | None               # konu taşınarak yapılan aramada beklenen doküman
+    standalone_doc_rank: int | None    # son soru tek başına sorulsaydı
+    standalone_gated: bool             # son soru tek başına sorulsaydı kapıda reddedilir miydi
+    seconds: float
+
+
+def evaluate_followups(items: list[dict], assistant: Assistant,
+                       on_row=lambda _row: None) -> list[FollowupRow]:
+    rows = []
+    for q in items:
+        *earlier, last = q["turns"]
+        previous = None
+        for turn in earlier:
+            previous = assistant.ask(turn, previous)
+        prepared = assistant.prepare(last, previous)
+        started = time.perf_counter()
+        raw = "".join(assistant.generate(prepared))
+        answer = assistant.finalize(prepared, raw, time.perf_counter() - started)
+        standalone = assistant.prepare(last)  # yalnızca arama, model çağrılmaz
+        passed, cited_doc = _score(q, answer)
+        doc = q.get("doc")
+        row = FollowupRow(q["id"], q["type"], q["turns"], answer.text, answer.refused,
+                          answer.refusal_reason, passed, cited_doc, list(answer.carried),
+                          _doc_rank(answer.hits, doc) if doc else None,
+                          _doc_rank(standalone.hits, doc) if doc else None,
+                          standalone.refusal_reason == "low_similarity",
+                          answer.retrieval_seconds + answer.generation_seconds)
+        on_row(row)
+        rows.append(row)
+    return rows
+
+
+def followup_summary(rows: list[FollowupRow]) -> dict:
+    def rate(subset: list[FollowupRow]) -> dict:
+        return {"passed": sum(r.passed for r in subset), "total": len(subset)}
+
+    answerable = [r for r in rows if r.type == "answerable"]
+    return {
+        "overall": rate(rows),
+        "answerable_correct": rate(answerable),
+        "unanswerable_refused": rate([r for r in rows if r.type in UNANSWERABLE]),
+        "topic_carried": sum(bool(r.carried) for r in rows),
+        "doc_at_1_with_topic": {"passed": sum(r.doc_rank == 1 for r in answerable),
+                                "total": len(answerable)},
+        "doc_at_1_standalone": {"passed": sum(r.standalone_doc_rank == 1 for r in answerable),
+                                "total": len(answerable)},
+        "answerable_gated_standalone": sum(r.standalone_gated for r in answerable),
+    }
 
 def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
                  rows: list[AnswerRow]) -> None:

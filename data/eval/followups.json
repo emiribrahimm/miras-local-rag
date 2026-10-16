@@ -1,0 +1,18 @@
+[
+  {"id": "f01", "type": "answerable", "doc": "gobeklitepe.md", "turns": ["Göbeklitepe hangi ilde bulunuyor?", "Peki hangi yıl UNESCO Dünya Mirası kalıcı listesine girdi?"], "expected": [["2018"]]},
+  {"id": "f02", "type": "answerable", "doc": "gobeklitepe.md", "turns": ["Göbeklitepe hangi yıl Dünya Mirası listesine girdi?", "Oradaki kazıları uzun yıllar kim yönetti?"], "expected": [["Schmidt"]]},
+  {"id": "f03", "type": "answerable", "doc": "efes.md", "turns": ["Efes hangi yıl Dünya Mirası olarak tescil edildi?", "Peki oradaki antik tiyatro kaç seyirci alabiliyordu?"], "expected": [["25.000", "25000", "25 bin"]]},
+  {"id": "f04", "type": "answerable", "doc": "hattusa.md", "turns": ["Hattuşa hangi uygarlığın başkentiydi?", "UNESCO listesine kaç yılında dahil edildi?"], "expected": [["1986"]]},
+  {"id": "f05", "type": "answerable", "doc": "nemrut-dagi.md", "turns": ["Nemrut Dağı'nın yüksekliği kaç metredir?", "Tepesindeki mezar-tapınağını hangi kral yaptırdı?"], "expected": [["Antiohos", "Antiochos", "Antiochus"]]},
+  {"id": "f06", "type": "answerable", "doc": "troya.md", "turns": ["Troya hangi yıldan beri Dünya Mirası listesinde?", "Peki 1870'lerde kim keşfetti?"], "expected": [["Schliemann"]]},
+  {"id": "f07", "type": "answerable", "doc": "catalhoyuk.md", "turns": ["Çatalhöyük'ü kim keşfetti?", "Konya'nın hangi ilçesinde?"], "expected": [["Çumra"]]},
+  {"id": "f08", "type": "answerable", "doc": "selimiye-camii.md", "turns": ["Selimiye Camii'nin mimarı kimdir?", "Peki hangi yıl ibadete açıldı?"], "expected": [["1575"]]},
+  {"id": "f09", "type": "answerable", "doc": "safranbolu.md", "turns": ["Safranbolu hangi ile bağlıdır?", "Ne zaman Dünya Mirası listesine girdi?"], "expected": [["1994"]]},
+  {"id": "f10", "type": "answerable", "doc": "ani.md", "turns": ["Ani ören yeri hangi ilde bulunur?", "Oradaki Meryemana Kilisesi'ni hangi mimar inşa etti?"], "expected": [["Trdat"]]},
+  {"id": "f11", "type": "answerable", "doc": "selimiye-camii.md", "turns": ["Mimar Sinan'ın \"ustalık eserim\" dediği cami hangisidir?", "Hangi yıl ibadete açıldı?"], "expected": [["1575"]]},
+  {"id": "f12", "type": "answerable", "doc": "pamukkale.md", "switch": true, "turns": ["Afrodisias hangi ilin hangi ilçesindedir?", "Ya Pamukkale hangi ilde yer alır?"], "expected": [["Denizli"]]},
+  {"id": "f13", "type": "answerable", "doc": "afrodisias.md", "switch": true, "turns": ["Efes hangi yıl Dünya Mirası olarak tescil edildi?", "Peki Afrodisias hangi yıl tescil edildi?"], "expected": [["2017"]]},
+  {"id": "f14", "type": "near_miss", "turns": ["Efes hangi yıl Dünya Mirası olarak tescil edildi?", "Peki giriş ücreti ne kadar?"]},
+  {"id": "f15", "type": "near_miss", "turns": ["Pamukkale hangi ilde yer alır?", "Ziyaret saatleri nedir?"]},
+  {"id": "f16", "type": "out_of_domain", "turns": ["Göbeklitepe hangi ilde bulunuyor?", "Python'da bir liste nasıl sıralanır?"]}
+]

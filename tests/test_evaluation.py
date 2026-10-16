@@ -1,5 +1,9 @@
-from miras.evaluation import (RetrievalRow, calibrate_threshold, evaluate_answers, matches_expected,
-                              normalize, retrieval_summary)
+import json
+
+from miras.config import ROOT
+from miras.evaluation import (RetrievalRow, calibrate_threshold, evaluate_answers, evaluate_followups,
+                              followup_summary, matches_expected, normalize, retrieval_summary)
+from miras.retrieval import title_keys
 
 
 def test_turkish_case_folding():
@@ -43,3 +47,40 @@ def test_answer_scoring(assistant, backend):
     rows = evaluate_answers(questions, assistant)
     assert [r.passed for r in rows] == [True, False, True]
     assert rows[0].cited_expected_doc is True and rows[2].refusal_reason == "low_similarity"
+
+
+def test_follow_up_scoring(assistant, backend):
+    backend.reply = "Göbeklitepe 2018 yılında listeye girdi [K1]."
+    items = [
+        {"id": "f1", "type": "answerable", "doc": "gobeklitepe.md",
+         "turns": ["Göbeklitepe hangi ilde?", "Peki ne zaman listeye girdi?"], "expected": [["2018"]]},
+        {"id": "f2", "type": "answerable", "doc": "efes.md", "switch": True,
+         "turns": ["Göbeklitepe hangi ilde?", "Efes hangi ilde?"], "expected": [["izmir"]]},
+    ]
+    rows = evaluate_followups(items, assistant)
+    assert rows[0].carried == ["Göbeklitepe"] and rows[0].passed and rows[0].cited_expected_doc
+    assert rows[0].doc_rank == 1 and rows[0].standalone_doc_rank is not None
+    assert rows[1].carried == [] and not rows[1].passed and rows[1].cited_expected_doc  # cevap yanlış, atıf doğru
+    # Her sohbet için iki model çağrısı (ilk tur + takip); bağlamsız arama modeli çağırmaz.
+    assert len(backend.chat_calls) == 4
+
+    summary = followup_summary(rows)
+    assert summary["overall"] == {"passed": 1, "total": 2} and summary["topic_carried"] == 1
+    assert summary["doc_at_1_with_topic"]["total"] == 2
+
+
+def test_follow_up_set_is_well_formed():
+    items = json.loads((ROOT / "data" / "eval" / "followups.json").read_text(encoding="utf-8"))
+    docs = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "data" / "docs").glob("*.md")}
+    keys = set()
+    for text in docs.values():
+        meta = dict(line.split(": ", 1) for line in text.split("---")[1].strip().splitlines())
+        keys |= title_keys(meta["title"], tuple(a.strip() for a in meta.get("aliases", "").split(",") if a.strip()))
+    assert len({q["id"] for q in items}) == len(items)
+    for q in items:
+        assert q["type"] in {"answerable", "near_miss", "out_of_domain"} and len(q["turns"]) == 2
+        if q["type"] == "answerable":
+            assert q["doc"] in docs and q["expected"]
+        # Takip sorusu bir alanı adıyla anıyorsa konu taşınmaz; bunlar "switch" olarak işaretli.
+        names_site = any(normalize(k) in normalize(q["turns"][1]) for k in keys)
+        assert names_site == q.get("switch", False), q["id"]
