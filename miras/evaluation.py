@@ -17,8 +17,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .backends import Backend
-from .pipeline import Assistant
-from .retrieval import Retriever
+from .pipeline import Answer, Assistant
+from .retrieval import Hit, Retriever
 
 UNANSWERABLE = ("near_miss", "out_of_domain")
 
@@ -36,6 +36,21 @@ def matches_expected(text: str, expected: list[list[str]]) -> bool:
     """Her gruptan en az bir varyant metinde geçmeli."""
     lowered = normalize(text)
     return all(any(normalize(variant) in lowered for variant in group) for group in expected)
+
+
+def _doc_rank(hits: list[Hit], doc: str) -> int | None:
+    """Beklenen dokümanın getirilen parçalar arasında ilk göründüğü sıra (1 tabanlı)."""
+    return next((i for i, h in enumerate(hits, 1) if h.chunk.filename == doc), None)
+
+
+def _score(q: dict, answer: Answer) -> tuple[bool, bool | None]:
+    """(geçti mi, beklenen dokümana atıf yapıldı mı). Atıf yalnızca verilen cevaplarda ölçülür."""
+    if q["type"] != "answerable":
+        return answer.refused, None
+    if answer.refused:
+        return False, None
+    return (matches_expected(answer.text, q["expected"]),
+            any(h.chunk.filename == q["doc"] for h in answer.sources))
 
 
 # --- arama ---------------------------------------------------------------
@@ -57,7 +72,7 @@ def evaluate_retrieval(questions: list[dict], backend: Backend, retriever: Retri
         hits = retriever.search(backend.embed_query(q["question"]), top_k, q["question"])
         rank, in_context = None, False
         if q["type"] == "answerable":
-            rank = next((i for i, h in enumerate(hits, 1) if h.chunk.filename == q["doc"]), None)
+            rank = _doc_rank(hits, q["doc"])
             in_context = matches_expected("\n".join(h.chunk.text for h in hits), q["expected"])
         rows.append(RetrievalRow(q["id"], q["type"], q["split"], max(h.score for h in hits),
                                  rank, in_context))
@@ -132,13 +147,7 @@ def evaluate_answers(questions: list[dict], assistant: Assistant,
     rows = []
     for q in questions:
         answer = assistant.ask(q["question"])
-        cited_doc = None
-        if q["type"] == "answerable":
-            passed = not answer.refused and matches_expected(answer.text, q["expected"])
-            if not answer.refused:
-                cited_doc = any(h.chunk.filename == q["doc"] for h in answer.sources)
-        else:
-            passed = answer.refused
+        passed, cited_doc = _score(q, answer)
         row = AnswerRow(q["id"], q["type"], q["split"], q["question"], answer.text, answer.refused,
                         answer.refusal_reason, passed, cited_doc,
                         max((h.score for h in answer.hits), default=0.0),
