@@ -1,9 +1,9 @@
 import json
 
 from miras.config import ROOT
-from miras.evaluation import (RetrievalRow, answer_summary, calibrate_threshold, evaluate_answers,
-                              evaluate_followups, followup_summary, matches_expected, normalize,
-                              retrieval_summary, write_report)
+from miras.evaluation import (RetrievalRow, answer_summary, calibrate_threshold, choose_keyword_weight,
+                              evaluate_answers, evaluate_followups, followup_summary, matches_expected, normalize,
+                              retrieval_summary, tune_keyword_weight, write_report)
 from miras.retrieval import title_keys
 
 
@@ -109,3 +109,29 @@ def test_report_has_follow_up_section_only_when_given(assistant, backend, tmp_pa
     assert "Peki \\| ne zaman" in md  # tablo hücresindeki | kaçırılır
     data = json.loads((tmp_path / "full.json").read_text(encoding="utf-8"))
     assert data["followups"]["rows"][0]["carried"] == ["Göbeklitepe"]
+
+
+def test_keyword_weight_choice_prefers_dev_mrr_then_smaller_weight():
+    def result(weight, mrr, context=1.0):
+        return {"weight": weight, "dev": {"mrr": mrr, "answer_in_context_at_k": context}}
+
+    assert choose_keyword_weight([result(0.0, 0.90), result(0.1, 0.95), result(0.2, 0.93)]) == 0.1
+    assert choose_keyword_weight([result(0.0, 0.95), result(0.1, 0.95)]) == 0.0
+    assert choose_keyword_weight([result(0.0, 0.95, 0.9), result(0.1, 0.95, 1.0)]) == 0.1
+
+
+def test_tune_embeds_each_question_once(store, backend, settings):
+    from miras.retrieval import Retriever
+    calls = []
+    embed = backend.embed_query
+    backend.embed_query = lambda text: calls.append(text) or embed(text)
+    questions = [
+        {"id": "1", "type": "answerable", "split": "dev", "doc": "gobeklitepe.md",
+         "question": "Göbeklitepe 2018", "expected": [["2018"]]},
+        {"id": "2", "type": "answerable", "split": "test", "doc": "efes.md",
+         "question": "Efes nerede?", "expected": [["izmir"]]},
+    ]
+    results = tune_keyword_weight(questions, backend, Retriever(store, backend.embed_model),
+                                  2, settings.min_similarity, weights=(0.0, 0.5))
+    assert len(calls) == 2 and [r["weight"] for r in results] == [0.0, 0.5]
+    assert results[0]["dev"]["questions"] == 1 and "answerable_gated" in results[1]["test"]

@@ -127,6 +127,49 @@ def calibrate_threshold(rows: list[RetrievalRow]) -> dict:
     }
 
 
+KEYWORD_WEIGHTS = (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5)
+
+
+class _CachedEmbeddings:
+    """Her soru bir kez gömülsün; ağırlık taraması aynı soruları tekrar tekrar arar."""
+
+    def __init__(self, backend: Backend) -> None:
+        self.backend = backend
+        self.cache: dict[str, object] = {}
+
+    def embed_query(self, text: str):
+        if text not in self.cache:
+            self.cache[text] = self.backend.embed_query(text)
+        return self.cache[text]
+
+
+def tune_keyword_weight(questions: list[dict], backend: Backend, retriever: Retriever, top_k: int,
+                        min_similarity: float, weights=KEYWORD_WEIGHTS) -> list[dict]:
+    """Her BM25 ağırlığı için dev ve test sorularında arama özetini çıkarır (model çağrılmaz)."""
+    cached = _CachedEmbeddings(backend)
+    results = []
+    for weight in weights:
+        rows = evaluate_retrieval(questions, cached, retriever, top_k, weight)  # type: ignore[arg-type]
+        result = {"weight": weight}
+        for split in ("dev", "test"):
+            subset = [r for r in rows if r.split == split]
+            result[split] = retrieval_summary(subset)
+            # Kapı getirilen parçaların ham benzerliğine bakar; sıralama değişince bu da oynayabilir.
+            result[split]["answerable_gated"] = sum(
+                r.top_score < min_similarity for r in subset if r.type == "answerable")
+        results.append(result)
+    return results
+
+
+def choose_keyword_weight(results: list[dict]) -> float:
+    """Dev MRR'ı en yüksek ağırlık; eşitlikte cevabı bağlamda tutan, sonra en küçük ağırlık."""
+    def key(r: dict) -> tuple:
+        dev = r["dev"]
+        return (round(dev["mrr"], 6), round(dev["answer_in_context_at_k"], 6), -r["weight"])
+
+    return max(results, key=key)["weight"]
+
+
 # --- cevap ---------------------------------------------------------------
 
 @dataclass

@@ -113,6 +113,30 @@ def cmd_calibrate(args: argparse.Namespace, settings: Settings) -> None:
     print("Bu değeri miras/config.py içindeki min_similarity alanına yazın.")
 
 
+def cmd_tune_hybrid(args: argparse.Namespace, settings: Settings) -> None:
+    backend = _backend(settings)
+    retriever = Retriever(Store(settings.db_path), backend.embed_model)
+    results = evaluation.tune_keyword_weight(
+        evaluation.load_questions(ROOT / "data" / "eval" / "questions.json"),
+        backend, retriever, settings.top_k, settings.min_similarity)
+    print(f"{'ağırlık':>8} | {'dev @1':>6} {'MRR':>6} {'bağlam':>6} {'kapı':>4} | "
+          f"{'test @1':>7} {'MRR':>6} {'bağlam':>6} {'kapı':>4}")
+    for r in results:
+        dev, test = r["dev"], r["test"]
+        print(f"{r['weight']:>8} | {dev['doc_hit_at_1']:>6.0%} {dev['mrr']:>6.3f} "
+              f"{dev['answer_in_context_at_k']:>6.0%} {dev['answerable_gated']:>4} | "
+              f"{test['doc_hit_at_1']:>7.0%} {test['mrr']:>6.3f} "
+              f"{test['answer_in_context_at_k']:>6.0%} {test['answerable_gated']:>4}")
+    print("(@1: doğru doküman ilk sırada, bağlam: cevap getirilen parçalarda, "
+          "kapı: eşikte reddedilecek cevaplanabilir soru)")
+    best = evaluation.choose_keyword_weight(results)
+    if best == 0:
+        print("\nHibrit arama dev sorularında fayda sağlamadı; bm25_weight = 0 bırakın.")
+    else:
+        print(f"\nÖnerilen ağırlık (dev MRR'ına göre): {best}. miras/config.py içindeki bm25_weight "
+              f"alanına ya da MIRAS_BM25_WEIGHT'e yazın, ardından calibrate ve eval çalıştırın.")
+
+
 def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     questions = evaluation.load_questions(ROOT / "data" / "eval" / "questions.json")
@@ -174,6 +198,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("calibrate", help="Benzerlik eşiğini test sorularından ölç")
     p.set_defaults(func=cmd_calibrate)
+
+    p = sub.add_parser("tune-hybrid", help="BM25 ağırlığını test sorularından ölç (model çağırmaz)")
+    p.set_defaults(func=cmd_tune_hybrid)
 
     p = sub.add_parser("eval", help="Test setini çalıştır, reports/ altına rapor yaz")
     p.set_defaults(func=cmd_eval)
