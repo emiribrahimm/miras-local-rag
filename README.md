@@ -80,8 +80,9 @@ Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY` or `MIRAS_DOCS_DIR`. If you change the
 embedding model you'll need `ingest --rebuild`.
 
-To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`. Only
-changed files get re-embedded. You'll probably want to rerun `calibrate` and update the topic
+To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
+upload them from the web UI sidebar ("Doküman ekle"), which saves them there and indexes them
+right away. Only changed files get re-embedded. You'll probably want to rerun `calibrate` and update the topic
 description in `miras/prompts.py` too. An optional header at the top of a file sets the title and
 aliases:
 
@@ -115,7 +116,6 @@ based, so it says more about this kind of question than about the system in gene
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
   bigger typos like "Gbeklitpe" fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/`.
-- You can't upload files from the UI yet.
 
 ## Credits and license
 
@@ -195,7 +195,9 @@ Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN
 `ingest --rebuild` çalıştırmak gerekiyor.
 
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
-`ingest` çalıştırmanız yeterli, sadece değişen dosyalar yeniden işleniyor. Sonrasında `calibrate`
+`ingest` çalıştırmanız ya da web arayüzünün kenar çubuğundan ("Doküman ekle") yüklemeniz yeterli.
+Yüklenen dosyalar aynı klasöre kaydedilip hemen indeksleniyor, sadece değişen dosyalar yeniden
+işleniyor. Sonrasında `calibrate`
 ile eşiği tekrar ölçmek ve `miras/prompts.py` içindeki konu tanımını güncellemek iyi olur. Dosyanın
 başına başlık ve takma adlar için şöyle bir üst bilgi eklenebilir:
 
@@ -229,7 +231,6 @@ dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğ
 - Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
   gibi daha büyük hatalarda sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
-- Arayüzden dosya yüklenemiyor, şimdilik klasöre koymak gerekiyor.
 
 ### Kaynaklar ve lisans
 
