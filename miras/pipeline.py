@@ -24,6 +24,8 @@ class Prepared:
     # None ise model çağrılır; aksi halde sabit cevap döner.
     refusal_reason: str | None = None  # "empty" | "low_similarity"
     retrieval_seconds: float = 0.0
+    # Önceki turdan taşınan alan başlıkları; boş değilse `question` bunlarla bağlamlandırılmıştır.
+    carried: tuple[str, ...] = ()
 
 
 @dataclass
@@ -35,6 +37,8 @@ class Answer:
     cited: list[int]            # cevapta atıf yapılan parçaların `hits` içindeki indeksleri
     retrieval_seconds: float = 0.0
     generation_seconds: float = 0.0
+    carried: tuple[str, ...] = ()  # bu soruya önceki turdan taşınan konu
+    topic: tuple[str, ...] = ()    # bu turun konusu; sonraki takip sorusuna taşınır
 
     @property
     def sources(self) -> list[Hit]:
@@ -47,13 +51,21 @@ class Assistant:
         self.retriever = retriever
         self.settings = settings
 
-    def prepare(self, question: str) -> Prepared:
+    def prepare(self, question: str, previous: Answer | None = None) -> Prepared:
         question = " ".join(question.split())[:MAX_QUESTION_CHARS]
         if not question:
             return Prepared(question, refusal_reason="empty")
+        # Takip sorusu: soruda hiçbir alan adı geçmiyorsa önceki turun konusu eklenir
+        # ("Peki ne zaman yapılmış?" -> "Selimiye Camii hakkında: Peki ne zaman yapılmış?").
+        # Bu metin hem aramada hem de modele giden soruda kullanılır.
+        carried: tuple[str, ...] = ()
+        if previous and previous.topic and not self.retriever.mentioned_titles(question):
+            carried = previous.topic
+            question = f"{', '.join(carried)} hakkında: {question}"
         started = time.perf_counter()
         hits = self.retriever.search(self.backend.embed_query(question), self.settings.top_k, question)
-        prepared = Prepared(question, hits, retrieval_seconds=time.perf_counter() - started)
+        prepared = Prepared(question, hits, retrieval_seconds=time.perf_counter() - started,
+                            carried=carried)
         # Benzerlik kapısı: ilgili parça yoksa modeli hiç çağırma, uydurma riskini sıfırla.
         if max(hit.score for hit in hits) < self.settings.min_similarity:
             prepared.refusal_reason = "low_similarity"
@@ -85,10 +97,20 @@ class Assistant:
                 text = strip_invalid_citations(text, len(prepared.hits))
                 cited = cited_indices(text, len(prepared.hits))
         return Answer(text, reason is not None, reason, prepared.hits, cited,
-                      prepared.retrieval_seconds, generation_seconds)
+                      prepared.retrieval_seconds, generation_seconds,
+                      carried=prepared.carried, topic=self._topic(prepared, cited))
 
-    def ask(self, question: str) -> Answer:
-        prepared = self.prepare(question)
+    def _topic(self, prepared: Prepared, cited: list[int]) -> tuple[str, ...]:
+        """Soruda adı geçen alanlar; hiç ad geçmiyorsa cevabın atıf yaptığı tek alan."""
+        titles = self.retriever.mentioned_titles(prepared.question) if prepared.question else set()
+        if not titles:
+            cited_titles = {prepared.hits[i].chunk.title for i in cited}
+            if len(cited_titles) == 1:
+                titles = cited_titles
+        return tuple(sorted(titles))
+
+    def ask(self, question: str, previous: Answer | None = None) -> Answer:
+        prepared = self.prepare(question, previous)
         started = time.perf_counter()
         raw = "".join(self.generate(prepared))
         return self.finalize(prepared, raw, time.perf_counter() - started)

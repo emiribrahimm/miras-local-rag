@@ -52,6 +52,35 @@ def test_streaming_pieces_join_to_final_text(assistant, backend):
     assert assistant.finalize(prepared, "".join(pieces)).text == backend.reply
 
 
+def test_follow_up_question_carries_previous_topic(assistant, backend):
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    assert first.topic == ("Göbeklitepe",) and first.carried == ()
+
+    follow = assistant.ask("Peki ne zaman listeye girdi?", first)
+    assert follow.carried == ("Göbeklitepe",) and follow.topic == ("Göbeklitepe",)
+    assert follow.hits[0].chunk.filename == "gobeklitepe.md"
+    assert "SORU: Göbeklitepe hakkında: Peki ne zaman listeye girdi?" in backend.chat_calls[-1][1]["content"]
+
+
+def test_naming_another_site_switches_topic(assistant, backend):
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    answer = assistant.ask("Efes nerede?", first)
+    assert answer.carried == () and answer.topic == ("Efes",)
+    assert "SORU: Efes nerede?" in backend.chat_calls[-1][1]["content"]
+
+
+def test_topic_comes_from_single_cited_site(assistant, backend):
+    backend.reply = "Şanlıurfa ilindedir [K1]."
+    answer = assistant.ask("Neolitik arkeolojik alan hangi ilde?")
+    assert answer.sources[0].chunk.filename == "gobeklitepe.md"
+    assert answer.topic == ("Göbeklitepe",)
+
+
+def test_refused_turn_has_no_topic_to_carry(assistant, backend):
+    refused = assistant.ask("Pizza hamuru tarifi nedir?")
+    assert refused.topic == ()
+    assert assistant.ask("Peki ne zaman listeye girdi?", refused).carried == ()
+
 def test_abstention_variants():
     assert is_abstention("Bu bilgi elimdeki dokümanlarda yer almıyor.")
     assert is_abstention("Verilen kaynaklarda bu bilgi bulunmamaktadır.")
