@@ -41,6 +41,11 @@ A few things I added after looking at where it went wrong:
   one's site: "Peki ne zaman yapılmış?" becomes "Selimiye Camii hakkında: Peki ne zaman
   yapılmış?". No extra model call, just a rule. Naming a site switches the topic; `yeni` in the
   CLI or "Sohbeti temizle" in the web UI resets it.
+- There's an optional keyword score (BM25 over word stems, the first 5 letters of each word) that
+  can be added to the ranking, for dates and rare names the embeddings miss. It's off by default
+  because I haven't measured it on the real models yet: `tune-hybrid` tries a few weights on the
+  eval questions (no chat model needed) and suggests one for `MIRAS_BM25_WEIGHT`. The threshold
+  still looks at the plain embedding similarity.
 
 The design notes from the start of the project are in `docs/superpowers/specs/`.
 
@@ -72,12 +77,13 @@ uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # also prints chunks and timings
 uv run python main.py ingest --rebuild
 uv run python main.py calibrate             # re-measure the similarity threshold
+uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
 uv run pytest                               # no models needed, ~1s
 ```
 
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
-`MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY` or `MIRAS_DOCS_DIR`. If you change the
+`MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT` or `MIRAS_DOCS_DIR`. If you change the
 embedding model you'll need `ingest --rebuild`.
 
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
@@ -163,6 +169,11 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   "Peki ne zaman yapılmış?" sorusu "Selimiye Camii hakkında: Peki ne zaman yapılmış?" oluyor. Ek
   model çağrısı yok, basit bir kural. Başka bir alanın adı geçince konu değişiyor; CLI'da `yeni`,
   web arayüzünde "Sohbeti temizle" sıfırlıyor.
+- İsteğe bağlı bir anahtar kelime skoru var (kelimelerin ilk 5 harfi üzerinden BM25). Embedding'in
+  kaçırdığı tarih ve nadir isimler için sıralamaya eklenebiliyor. Gerçek modellerle henüz
+  ölçmediğim için varsayılan olarak kapalı: `tune-hybrid` birkaç ağırlığı test sorularında deneyip
+  (sohbet modeli gerekmez) `MIRAS_BM25_WEIGHT` için bir değer öneriyor. Eşik yine sadece embedding
+  benzerliğine bakıyor.
 
 ### Kurulum
 
@@ -192,12 +203,13 @@ uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de gösterir
 uv run python main.py ingest --rebuild
 uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
+uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
 uv run pytest                               # model gerekmez, ~1 sn
 ```
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
-`MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
+`MIRAS_BM25_WEIGHT`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
 `ingest --rebuild` çalıştırmak gerekiyor.
 
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
