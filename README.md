@@ -37,6 +37,10 @@ A few things I added after looking at where it went wrong:
 - Short names like "Ani" embed poorly, so if a site's name or alias shows up in the question its
   chunks get a small boost. Spellings without Turkish characters work too ("Gobeklitepe"), and
   so do one-letter typos in longer names ("Göbeklitpe", "Selimye").
+- In the chat (CLI and web), a question that doesn't name any site is asked about the previous
+  one's site: "Peki ne zaman yapılmış?" becomes "Selimiye Camii hakkında: Peki ne zaman
+  yapılmış?". No extra model call, just a rule. Naming a site switches the topic; `yeni` in the
+  CLI or "Sohbeti temizle" in the web UI resets it.
 
 The design notes from the start of the project are in `docs/superpowers/specs/`.
 
@@ -106,7 +110,8 @@ based, so it says more about this kind of question than about the system in gene
 
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit. There's a GPU option
   (`--device gpu` or `MIRAS_CHAT_DEVICE=gpu`) but I haven't tested or measured it.
-- No follow-up questions, every question is answered on its own.
+- Follow-ups only carry over the site, not the rest of the conversation. An off-topic question
+  right after a site question can get past the threshold and reach the model, which then refuses.
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
   bigger typos like "Gbeklitpe" fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/`.
@@ -148,6 +153,10 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
 - "Ani" gibi kısa adlar embedding'de iyi temsil edilmiyor. Soruda bir alanın adı ya da takma adı
   geçiyorsa (`Truva`, `Ephesos`) o alanın parçaları biraz öne alınıyor. "Gobeklitepe" gibi Türkçe
   karaktersiz yazımlar ve uzun adlardaki tek harflik hatalar ("Göbeklitpe", "Selimye") da tanınıyor.
+- Sohbette (CLI ve web) hiçbir alan adı geçmeyen soru bir önceki sorunun alanıyla soruluyor:
+  "Peki ne zaman yapılmış?" sorusu "Selimiye Camii hakkında: Peki ne zaman yapılmış?" oluyor. Ek
+  model çağrısı yok, basit bir kural. Başka bir alanın adı geçince konu değişiyor; CLI'da `yeni`,
+  web arayüzünde "Sohbeti temizle" sıfırlıyor.
 
 ### Kurulum
 
@@ -215,7 +224,8 @@ dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğ
 
 - Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor.
   GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
-- Takip sorusu desteklenmiyor, her soru tek başına cevaplanıyor.
+- Takip sorularında sadece alan taşınıyor, sohbetin geri kalanı değil. Bir alan sorusundan hemen
+  sonra gelen konu dışı soru eşiği geçip modele ulaşabiliyor; model de reddediyor.
 - Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
   gibi daha büyük hatalarda sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
