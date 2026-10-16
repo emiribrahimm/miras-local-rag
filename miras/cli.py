@@ -43,8 +43,11 @@ def _print_sources(answer: Answer, verbose: bool) -> None:
             print(f"       {hit.chunk.text[:300]}...")
 
 
-def _answer_streaming(assistant: Assistant, question: str, verbose: bool) -> None:
-    prepared = assistant.prepare(question)
+def _answer_streaming(assistant: Assistant, question: str, verbose: bool,
+                      previous: Answer | None = None) -> Answer:
+    prepared = assistant.prepare(question, previous)
+    if prepared.carried:
+        _status(f"konu: {', '.join(prepared.carried)}")
     started = time.perf_counter()
     pieces = []
     for piece in assistant.generate(prepared):
@@ -55,6 +58,7 @@ def _answer_streaming(assistant: Assistant, question: str, verbose: bool) -> Non
     _print_sources(answer, verbose)
     if verbose:
         print(f"\n(arama {answer.retrieval_seconds:.2f} sn, üretim {answer.generation_seconds:.2f} sn)")
+    return answer
 
 
 def cmd_ingest(args: argparse.Namespace, settings: Settings) -> None:
@@ -73,6 +77,8 @@ def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
 def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     print("Miras — Türkiye'nin UNESCO Dünya Mirası alanları asistanı. Çıkmak için 'çık' yazın.")
+    print("Alan adı geçmeyen sorular önceki sorunun konusuyla sorulur; sıfırlamak için 'yeni' yazın.")
+    last: Answer | None = None
     while True:
         try:
             question = input("\nSoru> ").strip()
@@ -81,7 +87,10 @@ def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
             break
         if question.lower() in {"çık", "cik", "exit", "quit", "q"}:
             break
-        _answer_streaming(assistant, question, args.verbose)
+        if question.lower() == "yeni":
+            last = None
+            continue
+        last = _answer_streaming(assistant, question, args.verbose, last)
 
 
 def cmd_calibrate(args: argparse.Namespace, settings: Settings) -> None:

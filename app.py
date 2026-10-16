@@ -52,6 +52,8 @@ def render_sources(answer: Answer, show_all: bool) -> None:
             if hit.chunk.source_url:
                 st.caption(f"Kaynak: [{hit.chunk.title} — Vikipedi]({hit.chunk.source_url}) "
                            f"({hit.chunk.filename}, CC BY-SA 4.0)")
+    if answer.carried:
+        st.caption(f"↪ Önceki sorudan devam: {', '.join(answer.carried)}")
     if not answer.refused:
         st.caption(f"⏱️ arama {answer.retrieval_seconds:.2f} sn · üretim {answer.generation_seconds:.1f} sn")
 
@@ -93,7 +95,8 @@ if question:
     with st.chat_message("assistant"):
         try:
             with st.spinner("İlgili parçalar aranıyor..."):
-                prepared = assistant.prepare(question)
+                # Son cevabın konusu, alan adı geçmeyen takip sorularına taşınır.
+                prepared = assistant.prepare(question, history[-1][1] if history else None)
             started = time.perf_counter()
             raw = st.write_stream(assistant.generate(prepared))
             answer = assistant.finalize(prepared, raw, time.perf_counter() - started)

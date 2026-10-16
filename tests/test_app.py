@@ -30,3 +30,12 @@ def test_out_of_scope_question_shows_refusal(app):
     app.chat_input[0].set_value("Pizza hamuru tarifi nedir?").run()
     assert app.chat_message[1].markdown[0].value == ABSTAIN_SENTENCE
     assert "model çağrılmadı" in app.chat_message[1].caption[0].value
+
+
+def test_follow_up_question_shows_carried_topic(app):
+    app.chat_input[0].set_value("Efes nerede?").run()
+    app.chat_input[0].set_value("Peki hangi ilçede?").run()
+    assert not app.exception
+    captions = [c.value for c in app.chat_message[3].caption]
+    assert "↪ Önceki sorudan devam: Efes" in captions
+    assert not any("devam" in c.value for c in app.chat_message[1].caption)
