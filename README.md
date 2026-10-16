@@ -107,6 +107,12 @@ with every answer is in [`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-
 Take that with a grain of salt though. It's a small set I wrote myself, and scoring is keyword
 based, so it says more about this kind of question than about the system in general.
 
+There's also a small follow-up set in `data/eval/followups.json`: 16 two-turn conversations where
+only the second question is scored (13 answerable, 3 that should be refused). `eval` runs it after
+the main set and adds a section to the report that also shows where the right document would have
+ranked if the follow-up had been asked on its own. The report above predates it, so rerun `eval`
+to get those numbers.
+
 ## Limitations
 
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit. There's a GPU option
@@ -221,6 +227,12 @@ Model çağrılan sorularda ortanca süre 14 saniye civarı. Soru soru cevaplar�
 
 Bu sonucu fazla büyütmemek lazım: set küçük, soruları ben yazdım ve puanlama anahtar kelimeye
 dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğru cevap vereceğini değil.
+
+Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 16 iki turluk sohbet,
+sadece ikinci soru puanlanıyor (13'ü cevaplanabilir, 3'ü reddedilmeli). `eval` bunları ana setten
+sonra çalıştırıp rapora ayrı bir bölüm ekliyor; takip sorusu tek başına sorulsaydı doğru dokümanın
+kaçıncı sırada geleceği de orada. Yukarıdaki rapor bu setten önce üretildi, rakamlar için `eval`
+yeniden çalıştırılmalı.
 
 ### Eksikler
 
