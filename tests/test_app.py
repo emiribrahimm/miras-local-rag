@@ -39,3 +39,18 @@ def test_follow_up_question_shows_carried_topic(app):
     captions = [c.value for c in app.chat_message[3].caption]
     assert "↪ Önceki sorudan devam: Efes" in captions
     assert not any("devam" in c.value for c in app.chat_message[1].caption)
+
+
+def test_uploaded_doc_is_indexed_and_searchable(app, settings):
+    doc = "---\ntitle: Ani\n---\n\n# Ani\n\nAni ören yeri Kars ilinde bulunan bir Orta Çağ kentidir.\n"
+    app.sidebar.file_uploader[0].set_value([("ani.md", doc.encode(), "text/markdown"),
+                                            ("bos.md", b"", "text/markdown")])
+    next(b for b in app.sidebar.button if b.label == "İndeksle").click().run()
+    assert not app.exception
+    assert (settings.docs_dir / "ani.md").exists()
+    assert "İndekslendi: ani.md" in app.sidebar.success[0].value
+    assert "bos.md: dosya boş." in app.sidebar.error[0].value
+    assert "- Ani" in app.sidebar.markdown[1].value
+
+    app.chat_input[0].set_value("Ani hangi ilde?").run()
+    assert "[K1] Ani" in app.expander[0].label

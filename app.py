@@ -8,6 +8,7 @@ import streamlit as st
 
 from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
+from miras.ingest import ingest, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
 from miras.store import Store
@@ -29,6 +30,35 @@ def load_assistant() -> Assistant:
     retriever = Retriever(Store(SETTINGS.db_path), backend.embed_model)
     backend.embed_query("ısınma")  # embedding modelini şimdiden yükle
     return Assistant(backend, retriever, SETTINGS)
+
+
+def index_uploads(assistant: Assistant, uploads: list[tuple[str, bytes]]) -> None:
+    """Yüklenen dosyaları kaydeder, değişenleri gömer ve aramayı yeni indeksle yeniler."""
+    saved, errors = save_uploads(SETTINGS.docs_dir, uploads)
+    added: list[str] = []
+    if saved:
+        store = Store(SETTINGS.db_path)
+        try:
+            with st.spinner("Dokümanlar gömülüyor..."):
+                added = ingest(store, assistant.backend, SETTINGS).added
+                # Önbellekteki asistan paylaşıldığı için yeni parçalar hemen aranabilir olur.
+                assistant.retriever = Retriever(store, assistant.backend.embed_model)
+        except (BackendError, IndexError_, FileNotFoundError) as err:
+            errors.append(str(err))
+        finally:
+            store.close()
+    st.session_state.upload_result = (saved, added, errors)
+    st.rerun()
+
+
+def render_upload_result() -> None:
+    saved, added, errors = st.session_state.pop("upload_result", ([], [], []))
+    if added:
+        st.success("İndekslendi: " + ", ".join(added))
+    elif saved and not errors:
+        st.info("Dosyalar zaten indeksliydi, değişiklik yok.")
+    for error in errors:
+        st.error(error)
 
 
 def render_sources(answer: Answer, show_all: bool) -> None:
@@ -77,6 +107,13 @@ with st.sidebar:
     show_all = st.toggle("Getirilen tüm parçaları göster", value=False)
     st.subheader("Bilgi tabanı")
     st.markdown("\n".join(f"- {title}" for title in sorted({c.title for c in assistant.retriever.chunks})))
+    with st.form("upload", clear_on_submit=True):
+        uploads = st.file_uploader("Doküman ekle", type=["md", "txt"], accept_multiple_files=True,
+                                   help="Başlık ve takma adlar için dosyanın başına README'deki "
+                                        "üst bilgi eklenebilir; yoksa dosya adı başlık olur.")
+        if st.form_submit_button("İndeksle") and uploads:
+            index_uploads(assistant, [(f.name, f.getvalue()) for f in uploads])
+    render_upload_result()
     st.subheader("Örnek sorular")
     clicked = next((q for q in EXAMPLES if st.button(q, use_container_width=True)), None)
     if st.button("Sohbeti temizle"):
