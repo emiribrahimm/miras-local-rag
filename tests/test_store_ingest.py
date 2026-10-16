@@ -105,6 +105,11 @@ def test_aliases_and_ascii_spellings_get_title_boost(store, backend):
     assert boosted("Ephesoslu bir filozof") == set()
 
 
+def test_mentioned_titles(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+    assert retriever.mentioned_titles("Ephesos ve Göbeklitpe") == {"Efes", "Göbeklitepe"}
+    assert retriever.mentioned_titles("Peki ne zaman yapılmış?") == set()
+
 def test_title_key_is_first_word():
     from miras.retrieval import title_key
     assert title_key("Divriği Ulu Camii ve Darüşşifası") == "divriği"

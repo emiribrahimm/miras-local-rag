@@ -97,21 +97,27 @@ class Retriever:
         self._title_keys = {c.title: title_keys(c.title, c.aliases) for c in self.chunks}
         self._titles = np.array(titles, dtype=object)
 
-    def _title_bonus(self, query: str) -> np.ndarray:
-        """Soruda geçen alan adlarına ait parçalara TITLE_BOOST verir.
+    def mentioned_titles(self, query: str) -> set[str]:
+        """Soruda adı geçen alanların başlıkları.
 
-        "Ani" gibi kısa adlar embedding'de zayıf temsil ediliyor; bu, sorunun hangi
-        alanla ilgili olduğunu açıkça söylediği durumda sıralamayı düzeltir. Özel
-        isimlere ek kesme işaretiyle geldiği için ("Ani'deki") ad sonrası harf gelmesi
+        Özel isimlere ek kesme işaretiyle geldiği için ("Ani'deki") ad sonrası harf gelmesi
         eşleşme sayılmaz; böylece "aniden" gibi kelimeler "Ani"yi tetiklemez. Takma adlar
         ("Truva" -> Troya) ve Türkçe karaktersiz yazımlar ("Gobeklitepe") da eşleşir.
         Birebir eşleşmeyen uzun adlarda tek harflik yazım hataları da kabul edilir.
         """
         folded = _fold(query)
         words = re.findall(r"\w+", folded.translate(_ASCII))
-        matched = {title for title, keys in self._title_keys.items()
-                   if any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded) for key in keys)
-                   or any(fuzzy_mentions(words, key) for key in keys)}
+        return {title for title, keys in self._title_keys.items()
+                if any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded) for key in keys)
+                or any(fuzzy_mentions(words, key) for key in keys)}
+
+    def _title_bonus(self, query: str) -> np.ndarray:
+        """Soruda geçen alan adlarına ait parçalara TITLE_BOOST verir.
+
+        "Ani" gibi kısa adlar embedding'de zayıf temsil ediliyor; bu, sorunun hangi
+        alanla ilgili olduğunu açıkça söylediği durumda sıralamayı düzeltir.
+        """
+        matched = self.mentioned_titles(query)
         return np.where(np.isin(self._titles, list(matched)), TITLE_BOOST, 0.0)
 
     def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "") -> list[Hit]:
