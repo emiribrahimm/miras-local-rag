@@ -1,8 +1,9 @@
 import json
 
 from miras.config import ROOT
-from miras.evaluation import (RetrievalRow, calibrate_threshold, evaluate_answers, evaluate_followups,
-                              followup_summary, matches_expected, normalize, retrieval_summary)
+from miras.evaluation import (RetrievalRow, answer_summary, calibrate_threshold, evaluate_answers,
+                              evaluate_followups, followup_summary, matches_expected, normalize,
+                              retrieval_summary, write_report)
 from miras.retrieval import title_keys
 
 
@@ -84,3 +85,27 @@ def test_follow_up_set_is_well_formed():
         # Takip sorusu bir alanı adıyla anıyorsa konu taşınmaz; bunlar "switch" olarak işaretli.
         names_site = any(normalize(k) in normalize(q["turns"][1]) for k in keys)
         assert names_site == q.get("switch", False), q["id"]
+
+
+def test_report_has_follow_up_section_only_when_given(assistant, backend, tmp_path):
+    backend.reply = "Göbeklitepe 2018 yılında listeye girdi [K1]."
+    rows = evaluate_answers([{"id": "1", "type": "answerable", "split": "dev", "doc": "gobeklitepe.md",
+                              "question": "Göbeklitepe ne zaman?", "expected": [["2018"]]}], assistant)
+    followup_rows = evaluate_followups([{"id": "f1", "type": "answerable", "doc": "gobeklitepe.md",
+                                         "turns": ["Göbeklitepe nerede?", "Peki | ne zaman listeye girdi?"],
+                                         "expected": [["2018"]]}], assistant)
+    header = {"chat_model": "m", "chat_device": "cpu", "embed_model": "e", "top_k": 2,
+              "min_similarity": 0.2, "chunks": 3}
+    retrieval = retrieval_summary([RetrievalRow("1", "answerable", "dev", 0.9, 1, True)])
+
+    write_report(tmp_path / "plain", header, retrieval, answer_summary(rows), rows)
+    assert "Takip soruları" not in (tmp_path / "plain.md").read_text(encoding="utf-8")
+    assert "followups" not in json.loads((tmp_path / "plain.json").read_text(encoding="utf-8"))
+
+    write_report(tmp_path / "full", header, retrieval, answer_summary(rows), rows,
+                 followup_summary(followup_rows), followup_rows)
+    md = (tmp_path / "full.md").read_text(encoding="utf-8")
+    assert "## Takip soruları" in md and "| f1 | answerable | ✅ | Göbeklitepe | 1 |" in md
+    assert "Peki \\| ne zaman" in md  # tablo hücresindeki | kaçırılır
+    data = json.loads((tmp_path / "full.json").read_text(encoding="utf-8"))
+    assert data["followups"]["rows"][0]["carried"] == ["Göbeklitepe"]

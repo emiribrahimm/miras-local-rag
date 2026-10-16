@@ -125,14 +125,30 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
 
     rows = evaluation.evaluate_answers(questions, assistant, on_row=show)
     answers = evaluation.answer_summary(rows)
+
+    followups, followup_rows = None, []
+    followups_path = ROOT / "data" / "eval" / "followups.json"
+    if followups_path.exists():
+        print("\nTakip soruları:")
+
+        def show_followup(row: evaluation.FollowupRow) -> None:
+            carried = f" (konu: {', '.join(row.carried)})" if row.carried else ""
+            print(f"{'✅' if row.passed else '❌'} {row.id} [{row.seconds:4.1f} sn] "
+                  f"{' → '.join(row.turns)}{carried}\n     -> {row.answer[:160]}", flush=True)
+
+        followup_rows = evaluation.evaluate_followups(
+            evaluation.load_questions(followups_path), assistant, on_row=show_followup)
+        followups = evaluation.followup_summary(followup_rows)
     header = {"chat_model": settings.chat_model, "chat_device": settings.chat_device,
               "embed_model": settings.embed_model,
               "top_k": settings.top_k, "min_similarity": settings.min_similarity,
               "chunks": len(assistant.retriever.chunks)}
     stem = ROOT / "reports" / f"eval-{settings.chat_model}-{settings.chat_device}"
-    evaluation.write_report(stem, header, retrieval, answers, rows)
+    evaluation.write_report(stem, header, retrieval, answers, rows, followups, followup_rows)
     print(f"\nGenel: {answers['overall']['passed']}/{answers['overall']['total']}  "
           f"-> {stem}.md")
+    if followups:
+        print(f"Takip soruları: {followups['overall']['passed']}/{followups['overall']['total']}")
 
 
 def main(argv: list[str] | None = None) -> int:

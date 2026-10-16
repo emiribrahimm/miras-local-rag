@@ -246,11 +246,14 @@ def followup_summary(rows: list[FollowupRow]) -> dict:
     }
 
 def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
-                 rows: list[AnswerRow]) -> None:
+                 rows: list[AnswerRow], followups: dict | None = None,
+                 followup_rows: list[FollowupRow] = ()) -> None:
     """JSON (makine) ve Markdown (insan) olarak iki rapor yazar."""
     path_stem.parent.mkdir(parents=True, exist_ok=True)
     payload = {"config": header, "retrieval": retrieval, "answers": answers,
                "rows": [asdict(r) for r in rows]}
+    if followups is not None:
+        payload["followups"] = {"summary": followups, "rows": [asdict(r) for r in followup_rows]}
     path_stem.with_name(path_stem.name + ".json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -281,7 +284,42 @@ def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
         "| # | Tür | Sonuç | Skor | Süre (sn) | Soru | Cevap |", "|---|---|---|---|---|---|---|",
     ]
     for r in rows:
-        answer = r.answer.replace("\n", " ").replace("|", "\\|")
         lines.append(f"| {r.id} | {r.type} | {'✅' if r.passed else '❌'} | {r.top_score:.2f} "
-                     f"| {r.seconds:.1f} | {r.question} | {answer} |")
+                     f"| {r.seconds:.1f} | {r.question} | {_cell(r.answer)} |")
+    if followups is not None:
+        lines += _followup_lines(followups, followup_rows)
     path_stem.with_name(path_stem.name + ".md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _cell(text: str) -> str:
+    return text.replace("\n", " ").replace("|", "\\|")
+
+
+def _followup_lines(summary: dict, rows: list[FollowupRow]) -> list[str]:
+    def frac(d: dict) -> str:
+        return f"{d['passed']}/{d['total']}"
+
+    def rank(value: int | None) -> str:
+        return str(value) if value else "-"
+
+    lines = [
+        "", "## Takip soruları", "",
+        "İki turluk sohbetler (`data/eval/followups.json`); yalnızca ikinci tur puanlanır. "
+        "\"Tek başına\" sütunları aynı sorunun önceki tur olmadan sorulduğu durumu gösterir.", "",
+        f"- Genel: {frac(summary['overall'])}",
+        f"- Cevaplanabilir takip sorularında doğru cevap: {frac(summary['answerable_correct'])}",
+        f"- Reddedilmesi gereken takip soruları reddedildi: {frac(summary['unanswerable_refused'])}",
+        f"- Konu taşınan soru: {summary['topic_carried']}",
+        f"- Doğru doküman 1. sırada: konu taşınarak {frac(summary['doc_at_1_with_topic'])}, "
+        f"tek başına {frac(summary['doc_at_1_standalone'])}",
+        f"- Tek başına sorulsaydı kapıda reddedilecek cevaplanabilir soru: "
+        f"{summary['answerable_gated_standalone']}", "",
+        "| # | Tür | Sonuç | Taşınan konu | Sıra | Tek başına sıra | Sohbet | Cevap |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        standalone = "kapıda ret" if r.standalone_gated else rank(r.standalone_doc_rank)
+        lines.append(f"| {r.id} | {r.type} | {'✅' if r.passed else '❌'} | {', '.join(r.carried) or '-'} "
+                     f"| {rank(r.doc_rank)} | {standalone} | {_cell(' → '.join(r.turns))} "
+                     f"| {_cell(r.answer)} |")
+    return lines
