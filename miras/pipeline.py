@@ -63,7 +63,8 @@ class Assistant:
             carried = previous.topic
             question = f"{', '.join(carried)} hakkında: {question}"
         started = time.perf_counter()
-        hits = self.retriever.search(self.backend.embed_query(question), self.settings.top_k, question)
+        hits = self.retriever.search(self.backend.embed_query(question), self.settings.top_k, question,
+                                     self.settings.bm25_weight)
         prepared = Prepared(question, hits, retrieval_seconds=time.perf_counter() - started,
                             carried=carried)
         # Benzerlik kapısı: ilgili parça yoksa modeli hiç çağırma, uydurma riskini sıfırla.

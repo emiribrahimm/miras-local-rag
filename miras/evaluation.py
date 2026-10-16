@@ -67,10 +67,11 @@ class RetrievalRow:
 
 
 def evaluate_retrieval(questions: list[dict], backend: Backend, retriever: Retriever,
-                       top_k: int) -> list[RetrievalRow]:
+                       top_k: int, keyword_weight: float = 0.0) -> list[RetrievalRow]:
     rows = []
     for q in questions:
-        hits = retriever.search(backend.embed_query(q["question"]), top_k, q["question"])
+        hits = retriever.search(backend.embed_query(q["question"]), top_k, q["question"],
+                                keyword_weight)
         rank, in_context = None, False
         if q["type"] == "answerable":
             rank = _doc_rank(hits, q["doc"])
@@ -263,7 +264,8 @@ def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
     lines = [
         f"# Değerlendirme raporu — {header['chat_model']} ({header['chat_device']})", "",
         f"- Embedding modeli: `{header['embed_model']}`",
-        f"- top_k: {header['top_k']}, benzerlik eşiği: {header['min_similarity']}",
+        f"- top_k: {header['top_k']}, benzerlik eşiği: {header['min_similarity']}, "
+        f"BM25 ağırlığı: {header.get('bm25_weight', 0.0)}",
         f"- Parça sayısı: {header['chunks']}", "",
         "## Arama (yalnızca cevaplanabilir sorular)", "",
         f"- Doğru doküman 1. sırada: {retrieval['doc_hit_at_1']:.0%}",

@@ -34,6 +34,10 @@ class Settings:
     # Eşik elle seçilmedi; `python main.py calibrate` ile ölçülüp yazıldı.
     top_k: int = int(_env("TOP_K", "4"))
     min_similarity: float = float(_env("MIN_SIMILARITY", "0.53"))
+    # Hibrit arama: BM25 anahtar kelime skorunun (0–1) sıralamadaki ağırlığı. 0 = yalnızca
+    # embedding. Kapı eşiği her durumda ham kosinüs skoruna bakar. Değer `python main.py
+    # tune-hybrid` ile ölçülmeden açılmamalı; varsayılan bu yüzden kapalı.
+    bm25_weight: float = float(_env("BM25_WEIGHT", "0.0"))
 
     temperature: float = 0.0
     max_output_tokens: int = 400

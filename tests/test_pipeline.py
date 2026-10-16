@@ -81,6 +81,16 @@ def test_refused_turn_has_no_topic_to_carry(assistant, backend):
     assert refused.topic == ()
     assert assistant.ask("Peki ne zaman listeye girdi?", refused).carried == ()
 
+def test_bm25_weight_from_settings_reaches_search(assistant, settings, monkeypatch):
+    import dataclasses
+    seen = []
+    search = assistant.retriever.search
+    monkeypatch.setattr(assistant.retriever, "search",
+                        lambda *args: seen.append(args[-1]) or search(*args))
+    assistant.settings = dataclasses.replace(settings, bm25_weight=0.3)
+    assistant.ask("Efes nerede?")
+    assert seen == [0.3]
+
 def test_abstention_variants():
     assert is_abstention("Bu bilgi elimdeki dokümanlarda yer almıyor.")
     assert is_abstention("Verilen kaynaklarda bu bilgi bulunmamaktadır.")

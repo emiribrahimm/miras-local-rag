@@ -98,7 +98,7 @@ def cmd_calibrate(args: argparse.Namespace, settings: Settings) -> None:
     retriever = Retriever(Store(settings.db_path), backend.embed_model)
     rows = evaluation.evaluate_retrieval(
         evaluation.load_questions(ROOT / "data" / "eval" / "questions.json"),
-        backend, retriever, settings.top_k)
+        backend, retriever, settings.top_k, settings.bm25_weight)
     for kind in ("answerable", "near_miss", "out_of_domain"):
         scores = sorted(r.top_score for r in rows if r.type == kind)
         print(f"{kind:14} en iyi parça benzerliği: en düşük {scores[0]:.3f}, "
@@ -117,7 +117,7 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     questions = evaluation.load_questions(ROOT / "data" / "eval" / "questions.json")
     retrieval = evaluation.retrieval_summary(evaluation.evaluate_retrieval(
-        questions, assistant.backend, assistant.retriever, settings.top_k))
+        questions, assistant.backend, assistant.retriever, settings.top_k, settings.bm25_weight))
 
     def show(row: evaluation.AnswerRow) -> None:
         print(f"{'✅' if row.passed else '❌'} {row.id} [{row.seconds:4.1f} sn] {row.question}\n"
@@ -142,6 +142,7 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
     header = {"chat_model": settings.chat_model, "chat_device": settings.chat_device,
               "embed_model": settings.embed_model,
               "top_k": settings.top_k, "min_similarity": settings.min_similarity,
+              "bm25_weight": settings.bm25_weight,
               "chunks": len(assistant.retriever.chunks)}
     stem = ROOT / "reports" / f"eval-{settings.chat_model}-{settings.chat_device}"
     evaluation.write_report(stem, header, retrieval, answers, rows, followups, followup_rows)

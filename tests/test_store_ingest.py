@@ -93,6 +93,17 @@ def test_title_mention_boosts_ranking_but_not_gate_score(store, backend):
     assert {h.chunk.id: h.score for h in plain} == {h.chunk.id: h.score for h in boosted}
 
 
+def test_keyword_weight_lifts_rare_terms_without_touching_scores(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+    query = "Dünya Mirası 2018"
+    vector = backend.embed_query("Efes antik kent")  # embedding Efes'i işaret ediyor
+    plain = retriever.search(vector, 3, query)
+    assert retriever.search(vector, 3, query, 0.0) == plain
+    hybrid = retriever.search(vector, 3, query, 1.0)
+    assert plain[0].chunk.filename == "efes.md"
+    assert hybrid[0].chunk.section == "Göbeklitepe › Koruma"  # "2018" yalnızca orada geçiyor
+    assert {h.chunk.id: h.score for h in plain} == {h.chunk.id: h.score for h in hybrid}
+
 def test_aliases_and_ascii_spellings_get_title_boost(store, backend):
     retriever = Retriever(store, backend.embed_model)
 

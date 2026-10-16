@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .bm25 import BM25
 from .store import Store, StoredChunk
 
 
@@ -96,6 +97,7 @@ class Retriever:
         titles = [c.title for c in self.chunks]
         self._title_keys = {c.title: title_keys(c.title, c.aliases) for c in self.chunks}
         self._titles = np.array(titles, dtype=object)
+        self._bm25 = BM25([f"{c.section}\n{c.text}" for c in self.chunks])
 
     def mentioned_titles(self, query: str) -> set[str]:
         """Soruda adı geçen alanların başlıkları.
@@ -120,10 +122,17 @@ class Retriever:
         matched = self.mentioned_titles(query)
         return np.where(np.isin(self._titles, list(matched)), TITLE_BOOST, 0.0)
 
-    def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "") -> list[Hit]:
+    def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "",
+               keyword_weight: float = 0.0) -> list[Hit]:
+        """En iyi K parça. `keyword_weight` > 0 ise 0–1 ölçekli BM25 skoru da sıralamaya eklenir
+        (hibrit arama); tarih ve nadir özel isimlerde embedding'in kaçırdığını yakalar."""
         # Vektörler normalize saklandığı için iç çarpım = kosinüs benzerliği.
         scores = self.matrix @ query_vector
-        ranking = scores + self._title_bonus(query_text) if query_text else scores
+        ranking = scores
+        if query_text:
+            ranking = ranking + self._title_bonus(query_text)
+            if keyword_weight:
+                ranking = ranking + keyword_weight * self._bm25.scores(query_text)
         top_k = min(top_k, len(scores))
         best = np.argpartition(-ranking, top_k - 1)[:top_k]
         best = best[np.argsort(-ranking[best])]
