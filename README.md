@@ -40,7 +40,11 @@ A few things I added after looking at where it went wrong:
 - In the chat (CLI and web), a question that doesn't name any site is asked about the previous
   one's site: "Peki ne zaman yapılmış?" becomes "Selimiye Camii hakkında: Peki ne zaman
   yapılmış?". No extra model call, just a rule. Naming a site switches the topic; `yeni` in the
-  CLI or "Sohbeti temizle" in the web UI resets it.
+  CLI or "Sohbeti temizle" in the web UI resets it. The site name alone was enough to push
+  off-topic questions ("Python'da liste nasıl sıralanır?") over the threshold, so the topic is
+  only carried if the question on its own scores at least 0.40 against some chunk
+  (`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `calibrate` suggests a value). Off-topic questions in the eval
+  set scored 0.31–0.44, so 0.40 is a cautious first guess, not a measured one yet.
 - There's an optional keyword score (BM25 over word stems, the first 5 letters of each word) that
   can be added to the ranking, for dates and rare names the embeddings miss. It's off by default
   because I haven't measured it on the real models yet: `tune-hybrid` tries a few weights on the
@@ -83,7 +87,8 @@ uv run pytest                               # no models needed, ~1s
 ```
 
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
-`MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT` or `MIRAS_DOCS_DIR`. If you change the
+`MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
+`MIRAS_FOLLOWUP_MIN_SIMILARITY` or `MIRAS_DOCS_DIR`. If you change the
 embedding model you'll need `ingest --rebuild`.
 
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
@@ -113,18 +118,20 @@ with every answer is in [`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-
 Take that with a grain of salt though. It's a small set I wrote myself, and scoring is keyword
 based, so it says more about this kind of question than about the system in general.
 
-There's also a small follow-up set in `data/eval/followups.json`: 16 two-turn conversations where
-only the second question is scored (13 answerable, 3 that should be refused). `eval` runs it after
+There's also a small follow-up set in `data/eval/followups.json`: 19 two-turn conversations where
+only the second question is scored (13 answerable, 6 that should be refused, 4 of them off-topic). `eval` runs it after
 the main set and adds a section to the report that also shows where the right document would have
 ranked if the follow-up had been asked on its own. The report above predates it, so rerun `eval`
-to get those numbers.
+to get those numbers, including how many off-topic follow-ups were refused without calling the
+model.
 
 ## Limitations
 
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit. There's a GPU option
   (`--device gpu` or `MIRAS_CHAT_DEVICE=gpu`) but I haven't tested or measured it.
-- Follow-ups only carry over the site, not the rest of the conversation. An off-topic question
-  right after a site question can get past the threshold and reach the model, which then refuses.
+- Follow-ups only carry over the site, not the rest of the conversation. Whether a follow-up is
+  off-topic is decided by one similarity floor, so a short, vague follow-up ("Peki hangisi?") can
+  score below it and lose the topic, and a borderline off-topic one can still get through.
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
   bigger typos like "Gbeklitpe" fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/`.
@@ -168,7 +175,11 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
 - Sohbette (CLI ve web) hiçbir alan adı geçmeyen soru bir önceki sorunun alanıyla soruluyor:
   "Peki ne zaman yapılmış?" sorusu "Selimiye Camii hakkında: Peki ne zaman yapılmış?" oluyor. Ek
   model çağrısı yok, basit bir kural. Başka bir alanın adı geçince konu değişiyor; CLI'da `yeni`,
-  web arayüzünde "Sohbeti temizle" sıfırlıyor.
+  web arayüzünde "Sohbeti temizle" sıfırlıyor. Alan adı tek başına konu dışı soruları ("Python'da
+  liste nasıl sıralanır?") eşiğin üstüne taşıyabildiği için konu ancak soru kendi başına bir
+  parçayla en az 0.40 benzerlik alıyorsa taşınıyor (`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `calibrate` bir
+  değer öneriyor). Değerlendirmedeki konu dışı sorular 0.31–0.44 aldı; 0.40 henüz ölçülmüş değil,
+  temkinli bir başlangıç değeri.
 - İsteğe bağlı bir anahtar kelime skoru var (kelimelerin ilk 5 harfi üzerinden BM25). Embedding'in
   kaçırdığı tarih ve nadir isimler için sıralamaya eklenebiliyor. Gerçek modellerle henüz
   ölçmediğim için varsayılan olarak kapalı: `tune-hybrid` birkaç ağırlığı test sorularında deneyip
@@ -209,7 +220,7 @@ uv run pytest                               # model gerekmez, ~1 sn
 ```
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
-`MIRAS_BM25_WEIGHT`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
+`MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
 `ingest --rebuild` çalıştırmak gerekiyor.
 
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
@@ -240,18 +251,20 @@ Model çağrılan sorularda ortanca süre 14 saniye civarı. Soru soru cevaplar�
 Bu sonucu fazla büyütmemek lazım: set küçük, soruları ben yazdım ve puanlama anahtar kelimeye
 dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğru cevap vereceğini değil.
 
-Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 16 iki turluk sohbet,
-sadece ikinci soru puanlanıyor (13'ü cevaplanabilir, 3'ü reddedilmeli). `eval` bunları ana setten
+Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 19 iki turluk sohbet,
+sadece ikinci soru puanlanıyor (13'ü cevaplanabilir, 6'sı reddedilmeli, bunların 4'ü konu dışı). `eval` bunları ana setten
 sonra çalıştırıp rapora ayrı bir bölüm ekliyor; takip sorusu tek başına sorulsaydı doğru dokümanın
 kaçıncı sırada geleceği de orada. Yukarıdaki rapor bu setten önce üretildi, rakamlar için `eval`
-yeniden çalıştırılmalı.
+yeniden çalıştırılmalı. Konu dışı takip sorularından kaçının model çağrılmadan reddedildiği de
+raporda.
 
 ### Eksikler
 
 - Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor.
   GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
-- Takip sorularında sadece alan taşınıyor, sohbetin geri kalanı değil. Bir alan sorusundan hemen
-  sonra gelen konu dışı soru eşiği geçip modele ulaşabiliyor; model de reddediyor.
+- Takip sorularında sadece alan taşınıyor, sohbetin geri kalanı değil. Sorunun konu dışı olup
+  olmadığına tek bir benzerlik eşiği karar veriyor; "Peki hangisi?" gibi kısa ve belirsiz bir takip
+  sorusu eşiğin altında kalıp konuyu kaybedebilir, sınırda bir konu dışı soru da geçebilir.
 - Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
   gibi daha büyük hatalarda sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
