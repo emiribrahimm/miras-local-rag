@@ -112,6 +112,19 @@ def cmd_calibrate(args: argparse.Namespace, settings: Settings) -> None:
           f"{result['near_miss_blocked_by_gate']:.0%} (kalanı modelin reddetmesi gerekir)")
     print("Bu değeri miras/config.py içindeki min_similarity alanına yazın.")
 
+    followups_path = ROOT / "data" / "eval" / "followups.json"
+    if followups_path.exists():
+        keep, block = evaluation.followup_floor_scores(
+            evaluation.load_questions(followups_path),
+            evaluation.load_questions(ROOT / "data" / "eval" / "questions.json"), backend, retriever)
+        floor = evaluation.calibrate_followup_floor(keep, block)
+        print(f"\nTakip soruları tek başına en düşük {floor['lowest_followup']:.3f}, "
+              f"konu dışı sorular en yüksek {floor['highest_off_topic']:.3f}")
+        print(f"Önerilen konu taşıma eşiği: {floor['floor']} "
+              f"(eşit derecede iyi aralık: {floor['best_range'][0]}–{floor['best_range'][1]}, "
+              f"dengeli doğruluk: {floor['balanced_accuracy']:.0%}, şu an: {settings.followup_min_similarity})")
+        print("Bu değeri followup_min_similarity alanına ya da MIRAS_FOLLOWUP_MIN_SIMILARITY'ye yazın.")
+
 
 def cmd_tune_hybrid(args: argparse.Namespace, settings: Settings) -> None:
     backend = _backend(settings)
@@ -167,6 +180,7 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
               "embed_model": settings.embed_model,
               "top_k": settings.top_k, "min_similarity": settings.min_similarity,
               "bm25_weight": settings.bm25_weight,
+              "followup_min_similarity": settings.followup_min_similarity,
               "chunks": len(assistant.retriever.chunks)}
     stem = ROOT / "reports" / f"eval-{settings.chat_model}-{settings.chat_device}"
     evaluation.write_report(stem, header, retrieval, answers, rows, followups, followup_rows)

@@ -127,6 +127,41 @@ def calibrate_threshold(rows: list[RetrievalRow]) -> dict:
     }
 
 
+def followup_floor_scores(followups: list[dict], questions: list[dict], backend: Backend,
+                          retriever: Retriever) -> tuple[list[float], list[float]]:
+    """Takip eşiği için ham soru benzerlikleri: (konu taşınması gerekenler, engellenmesi gerekenler).
+
+    Taşınması gerekenler: alan adı geçmeyen cevaplanabilir takip soruları, tek başına.
+    Engellenmesi gerekenler: konu dışı sorular ve konu dışı takip soruları.
+    """
+    def best(text: str) -> float:
+        return retriever.best_score(backend.embed_query(text))
+
+    keep = [best(q["turns"][-1]) for q in followups
+            if q["type"] == "answerable" and not q.get("switch")]
+    block = ([best(q["question"]) for q in questions if q["type"] == "out_of_domain"]
+             + [best(q["turns"][-1]) for q in followups if q["type"] == "out_of_domain"])
+    return keep, block
+
+
+def calibrate_followup_floor(keep: list[float], block: list[float]) -> dict:
+    """Konu taşıma eşiği: takip sorularını taşıyıp konu dışı soruları taşımayan en iyi aralığın ortası."""
+    def balanced_accuracy(floor: float) -> float:
+        return (sum(s >= floor for s in keep) / len(keep) + sum(s < floor for s in block) / len(block)) / 2
+
+    candidates = [round(0.20 + 0.01 * i, 2) for i in range(41)]
+    scores = {t: balanced_accuracy(t) for t in candidates}
+    best = max(scores.values())
+    plateau = [t for t in candidates if scores[t] == best]
+    return {
+        "floor": plateau[len(plateau) // 2],
+        "best_range": [plateau[0], plateau[-1]],
+        "balanced_accuracy": best,
+        "lowest_followup": round(min(keep), 3),
+        "highest_off_topic": round(max(block), 3),
+    }
+
+
 KEYWORD_WEIGHTS = (0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5)
 
 
@@ -281,6 +316,10 @@ def followup_summary(rows: list[FollowupRow]) -> dict:
         "overall": rate(rows),
         "answerable_correct": rate(answerable),
         "unanswerable_refused": rate([r for r in rows if r.type in UNANSWERABLE]),
+        # Konu dışı takip sorularının model çağrılmadan kapıda reddedilmesi beklenir.
+        "out_of_domain_gated": {
+            "passed": sum(r.refusal_reason == "low_similarity" for r in rows if r.type == "out_of_domain"),
+            "total": sum(r.type == "out_of_domain" for r in rows)},
         "topic_carried": sum(bool(r.carried) for r in rows),
         "doc_at_1_with_topic": {"passed": sum(r.doc_rank == 1 for r in answerable),
                                 "total": len(answerable)},
@@ -308,7 +347,8 @@ def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
         f"# Değerlendirme raporu — {header['chat_model']} ({header['chat_device']})", "",
         f"- Embedding modeli: `{header['embed_model']}`",
         f"- top_k: {header['top_k']}, benzerlik eşiği: {header['min_similarity']}, "
-        f"BM25 ağırlığı: {header.get('bm25_weight', 0.0)}",
+        f"BM25 ağırlığı: {header.get('bm25_weight', 0.0)}, "
+        f"takip konu eşiği: {header.get('followup_min_similarity', 0.0)}",
         f"- Parça sayısı: {header['chunks']}", "",
         "## Arama (yalnızca cevaplanabilir sorular)", "",
         f"- Doğru doküman 1. sırada: {retrieval['doc_hit_at_1']:.0%}",
@@ -354,6 +394,7 @@ def _followup_lines(summary: dict, rows: list[FollowupRow]) -> list[str]:
         f"- Genel: {frac(summary['overall'])}",
         f"- Cevaplanabilir takip sorularında doğru cevap: {frac(summary['answerable_correct'])}",
         f"- Reddedilmesi gereken takip soruları reddedildi: {frac(summary['unanswerable_refused'])}",
+        f"- Konu dışı takip soruları model çağrılmadan reddedildi: {frac(summary['out_of_domain_gated'])}",
         f"- Konu taşınan soru: {summary['topic_carried']}",
         f"- Doğru doküman 1. sırada: konu taşınarak {frac(summary['doc_at_1_with_topic'])}, "
         f"tek başına {frac(summary['doc_at_1_standalone'])}",

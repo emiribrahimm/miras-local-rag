@@ -14,5 +14,8 @@
   {"id": "f13", "type": "answerable", "doc": "afrodisias.md", "switch": true, "turns": ["Efes hangi yıl Dünya Mirası olarak tescil edildi?", "Peki Afrodisias hangi yıl tescil edildi?"], "expected": [["2017"]]},
   {"id": "f14", "type": "near_miss", "turns": ["Efes hangi yıl Dünya Mirası olarak tescil edildi?", "Peki giriş ücreti ne kadar?"]},
   {"id": "f15", "type": "near_miss", "turns": ["Pamukkale hangi ilde yer alır?", "Ziyaret saatleri nedir?"]},
-  {"id": "f16", "type": "out_of_domain", "turns": ["Göbeklitepe hangi ilde bulunuyor?", "Python'da bir liste nasıl sıralanır?"]}
+  {"id": "f16", "type": "out_of_domain", "turns": ["Göbeklitepe hangi ilde bulunuyor?", "Python'da bir liste nasıl sıralanır?"]},
+  {"id": "f17", "type": "out_of_domain", "turns": ["Selimiye Camii'nin mimarı kimdir?", "Türk kahvesi nasıl pişirilir?"]},
+  {"id": "f18", "type": "out_of_domain", "turns": ["Troya hangi yıldan beri Dünya Mirası listesinde?", "Fransa'nın başkenti neresidir?"]},
+  {"id": "f19", "type": "out_of_domain", "turns": ["Pamukkale hangi ilde yer alır?", "Mars'ın kaç uydusu vardır?"]}
 ]

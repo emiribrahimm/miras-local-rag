@@ -1,7 +1,8 @@
 import json
 
 from miras.config import ROOT
-from miras.evaluation import (RetrievalRow, answer_summary, calibrate_threshold, choose_keyword_weight,
+from miras.evaluation import (RetrievalRow, answer_summary, calibrate_followup_floor, calibrate_threshold,
+                              choose_keyword_weight, followup_floor_scores,
                               evaluate_answers, evaluate_followups, followup_summary, matches_expected, normalize,
                               retrieval_summary, tune_keyword_weight, write_report)
 from miras.retrieval import title_keys
@@ -36,6 +37,27 @@ def test_threshold_is_chosen_from_dev_and_checked_on_test():
     assert result["near_miss_blocked_by_gate"] == 0.5
 
 
+def test_follow_up_floor_separates_follow_ups_from_off_topic():
+    result = calibrate_followup_floor(keep=[0.55, 0.62, 0.70], block=[0.31, 0.44])
+    assert result["best_range"] == [0.45, 0.55] and result["floor"] == 0.5
+    assert result["balanced_accuracy"] == 1.0
+    assert result["lowest_followup"] == 0.55 and result["highest_off_topic"] == 0.44
+
+
+def test_follow_up_floor_scores_use_standalone_questions(store, backend):
+    from miras.retrieval import Retriever
+    followups = [
+        {"id": "f1", "type": "answerable", "turns": ["Göbeklitepe nerede?", "Peki ne zaman listeye girdi?"]},
+        {"id": "f2", "type": "answerable", "switch": True, "turns": ["Göbeklitepe nerede?", "Efes nerede?"]},
+        {"id": "f3", "type": "out_of_domain", "turns": ["Göbeklitepe nerede?", "Pizza hamuru tarifi nedir?"]},
+    ]
+    questions = [{"id": "o1", "type": "out_of_domain", "split": "dev", "question": "Mars'ın kaç uydusu var?"},
+                 {"id": "a1", "type": "answerable", "split": "dev", "question": "Efes nerede?"}]
+    keep, block = followup_floor_scores(followups, questions, backend, Retriever(store, backend.embed_model))
+    assert len(keep) == 1 and keep[0] > 0  # konu değiştiren f2 sayılmaz
+    assert block == [0.0, 0.0]
+
+
 def test_answer_scoring(assistant, backend):
     backend.reply = "Göbeklitepe Şanlıurfa'dadır [K1]."
     questions = [
@@ -57,17 +79,21 @@ def test_follow_up_scoring(assistant, backend):
          "turns": ["Göbeklitepe hangi ilde?", "Peki ne zaman listeye girdi?"], "expected": [["2018"]]},
         {"id": "f2", "type": "answerable", "doc": "efes.md", "switch": True,
          "turns": ["Göbeklitepe hangi ilde?", "Efes hangi ilde?"], "expected": [["izmir"]]},
+        {"id": "f3", "type": "out_of_domain", "turns": ["Göbeklitepe hangi ilde?", "Pizza hamuru tarifi nedir?"]},
     ]
     rows = evaluate_followups(items, assistant)
     assert rows[0].carried == ["Göbeklitepe"] and rows[0].passed and rows[0].cited_expected_doc
     assert rows[0].doc_rank == 1 and rows[0].standalone_doc_rank is not None
     assert rows[1].carried == [] and not rows[1].passed and rows[1].cited_expected_doc  # cevap yanlış, atıf doğru
-    # Her sohbet için iki model çağrısı (ilk tur + takip); bağlamsız arama modeli çağırmaz.
-    assert len(backend.chat_calls) == 4
+    assert rows[2].carried == [] and rows[2].refusal_reason == "low_similarity"
+    # İlk iki sohbette iki model çağrısı (ilk tur + takip), konu dışı takip kapıda kalır;
+    # bağlamsız arama modeli çağırmaz.
+    assert len(backend.chat_calls) == 5
 
     summary = followup_summary(rows)
-    assert summary["overall"] == {"passed": 1, "total": 2} and summary["topic_carried"] == 1
+    assert summary["overall"] == {"passed": 2, "total": 3} and summary["topic_carried"] == 1
     assert summary["doc_at_1_with_topic"]["total"] == 2
+    assert summary["out_of_domain_gated"] == {"passed": 1, "total": 1}
 
 
 def test_follow_up_set_is_well_formed():
