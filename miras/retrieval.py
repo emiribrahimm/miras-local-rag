@@ -122,6 +122,10 @@ class Retriever:
         matched = self.mentioned_titles(query)
         return np.where(np.isin(self._titles, list(matched)), TITLE_BOOST, 0.0)
 
+    def best_score(self, query_vector: np.ndarray) -> float:
+        """Sorunun herhangi bir parçayla en yüksek ham kosinüs benzerliği."""
+        return float(np.max(self.matrix @ query_vector))
+
     def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "",
                keyword_weight: float = 0.0) -> list[Hit]:
         """En iyi K parça. `keyword_weight` > 0 ise 0–1 ölçekli BM25 skoru da sıralamaya eklenir

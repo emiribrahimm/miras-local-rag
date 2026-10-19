@@ -38,6 +38,11 @@ class Settings:
     # embedding. Kapı eşiği her durumda ham kosinüs skoruna bakar. Değer `python main.py
     # tune-hybrid` ile ölçülmeden açılmamalı; varsayılan bu yüzden kapalı.
     bm25_weight: float = float(_env("BM25_WEIGHT", "0.0"))
+    # Takip soruları: alan adı geçmeyen soru önceki turun konusuyla sorulur, ama sorunun
+    # kendisinin en iyi benzerliği bu değerin altındaysa (konu dışı) konu taşınmaz; aksi halde
+    # alan adı benzerliği şişirip konu dışı soruyu kapıdan geçirir. 0 = kontrol kapalı.
+    # Konu dışı sorular 0.31–0.44 aldı; `python main.py calibrate` ile ölçülmesi önerilir.
+    followup_min_similarity: float = float(_env("FOLLOWUP_MIN_SIMILARITY", "0.40"))
 
     temperature: float = 0.0
     max_output_tokens: int = 400

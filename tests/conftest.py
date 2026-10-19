@@ -24,7 +24,7 @@ def settings(tmp_path):
     for name, text in DOCS.items():
         (docs / name).write_text(text, encoding="utf-8")
     return dataclasses.replace(SETTINGS, docs_dir=docs, db_path=tmp_path / "test.db",
-                               top_k=2, min_similarity=0.2)
+                               top_k=2, min_similarity=0.2, followup_min_similarity=0.1)
 
 
 @pytest.fixture

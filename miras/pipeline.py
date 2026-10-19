@@ -55,16 +55,19 @@ class Assistant:
         question = " ".join(question.split())[:MAX_QUESTION_CHARS]
         if not question:
             return Prepared(question, refusal_reason="empty")
+        started = time.perf_counter()
+        vector = self.backend.embed_query(question)
         # Takip sorusu: soruda hiçbir alan adı geçmiyorsa önceki turun konusu eklenir
         # ("Peki ne zaman yapılmış?" -> "Selimiye Camii hakkında: Peki ne zaman yapılmış?").
-        # Bu metin hem aramada hem de modele giden soruda kullanılır.
+        # Bu metin hem aramada hem de modele giden soruda kullanılır. Soru tek başına hiçbir
+        # parçaya benzemiyorsa (konu dışı) konu taşınmaz: alan adı onu kapıdan geçirmesin.
         carried: tuple[str, ...] = ()
-        if previous and previous.topic and not self.retriever.mentioned_titles(question):
+        if (previous and previous.topic and not self.retriever.mentioned_titles(question)
+                and self.retriever.best_score(vector) >= self.settings.followup_min_similarity):
             carried = previous.topic
             question = f"{', '.join(carried)} hakkında: {question}"
-        started = time.perf_counter()
-        hits = self.retriever.search(self.backend.embed_query(question), self.settings.top_k, question,
-                                     self.settings.bm25_weight)
+            vector = self.backend.embed_query(question)
+        hits = self.retriever.search(vector, self.settings.top_k, question, self.settings.bm25_weight)
         prepared = Prepared(question, hits, retrieval_seconds=time.perf_counter() - started,
                             carried=carried)
         # Benzerlik kapısı: ilgili parça yoksa modeli hiç çağırma, uydurma riskini sıfırla.

@@ -81,6 +81,22 @@ def test_refused_turn_has_no_topic_to_carry(assistant, backend):
     assert refused.topic == ()
     assert assistant.ask("Peki ne zaman listeye girdi?", refused).carried == ()
 
+def test_off_topic_follow_up_does_not_carry_topic(assistant, backend):
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    answer = assistant.ask("Pizza hamuru tarifi nedir?", first)
+    assert answer.carried == () and answer.refusal_reason == "low_similarity"
+    assert len(backend.chat_calls) == 1  # yalnızca ilk soru modele gitti
+
+
+def test_follow_up_floor_zero_always_carries(assistant, backend, settings):
+    import dataclasses
+    assistant.settings = dataclasses.replace(settings, followup_min_similarity=0.0)
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    answer = assistant.ask("Pizza hamuru tarifi nedir?", first)
+    # Eski davranış: alan adı eklenince konu dışı soru da kapıyı geçiyor.
+    assert answer.carried == ("Göbeklitepe",) and not answer.refused
+
+
 def test_bm25_weight_from_settings_reaches_search(assistant, settings, monkeypatch):
     import dataclasses
     seen = []
