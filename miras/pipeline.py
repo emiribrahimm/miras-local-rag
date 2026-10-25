@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-from .backends import Backend
+from .backends import Backend, Message
 from .config import Settings
 from .prompts import (ABSTAIN_SENTENCE, EMPTY_QUESTION_MESSAGE, build_messages, cited_indices,
                       is_abstention, strip_invalid_citations)
 from .retrieval import Hit, Retriever
+from .store import Store
 
 MAX_QUESTION_CHARS = 1000
 
@@ -26,6 +29,7 @@ class Prepared:
     retrieval_seconds: float = 0.0
     # Önceki turdan taşınan alan başlıkları; boş değilse `question` bunlarla bağlamlandırılmıştır.
     carried: tuple[str, ...] = ()
+    cached: bool = False  # cevap model yerine önbellekten geldiyse `generate` doğru yapar
 
 
 @dataclass
@@ -39,6 +43,7 @@ class Answer:
     generation_seconds: float = 0.0
     carried: tuple[str, ...] = ()  # bu soruya önceki turdan taşınan konu
     topic: tuple[str, ...] = ()    # bu turun konusu; sonraki takip sorusuna taşınır
+    cached: bool = False           # model çağrılmadı, ham cevap önbellekten geldi
 
     @property
     def sources(self) -> list[Hit]:
@@ -46,10 +51,13 @@ class Answer:
 
 
 class Assistant:
-    def __init__(self, backend: Backend, retriever: Retriever, settings: Settings) -> None:
+    def __init__(self, backend: Backend, retriever: Retriever, settings: Settings,
+                 cache: Store | None = None) -> None:
         self.backend = backend
         self.retriever = retriever
         self.settings = settings
+        # Verilirse ham model cevapları bu veritabanında önbelleğe alınır (settings.answer_cache).
+        self.cache = cache
 
     def prepare(self, question: str, previous: Answer | None = None) -> Prepared:
         question = " ".join(question.split())[:MAX_QUESTION_CHARS]
@@ -82,10 +90,33 @@ class Assistant:
         elif prepared.refusal_reason == "low_similarity":
             yield ABSTAIN_SENTENCE
         else:
-            yield from self.backend.stream_chat(
-                build_messages(prepared.question, prepared.hits),
-                max_tokens=self.settings.max_output_tokens,
-                temperature=self.settings.temperature, seed=self.settings.seed)
+            messages = build_messages(prepared.question, prepared.hits)
+            cache = self.cache if self.settings.answer_cache else None
+            key = self._cache_key(messages) if cache else ""
+            cached = cache.cached_answer(key) if cache else None
+            if cached is not None:
+                prepared.cached = True
+                yield cached
+                return
+            pieces = []
+            for piece in self.backend.stream_chat(
+                    messages, max_tokens=self.settings.max_output_tokens,
+                    temperature=self.settings.temperature, seed=self.settings.seed):
+                pieces.append(piece)
+                yield piece
+            # Yalnızca sonuna kadar okunmuş akış kaydedilir; yarıda kesilen cevap önbelleğe girmez.
+            if cache and "".join(pieces).strip():
+                cache.cache_answer(key, "".join(pieces))
+
+    def _cache_key(self, messages: list[Message]) -> str:
+        """Prompt (sistem mesajı, parçalar, soru), model ve üretim ayarlarının özeti.
+
+        Doküman, prompt ya da model değişince anahtar da değişir; ayrıca geçersizleştirme gerekmez.
+        """
+        s = self.settings
+        payload = [self.backend.chat_model, s.chat_device, s.max_output_tokens, s.temperature,
+                   s.seed, messages]
+        return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode("utf-8")).hexdigest()
 
     def finalize(self, prepared: Prepared, raw_text: str, generation_seconds: float = 0.0) -> Answer:
         """Ham model çıktısını doğrular: reddetme tespiti ve kaynak etiketlerinin kontrolü."""
@@ -102,7 +133,8 @@ class Assistant:
                 cited = cited_indices(text, len(prepared.hits))
         return Answer(text, reason is not None, reason, prepared.hits, cited,
                       prepared.retrieval_seconds, generation_seconds,
-                      carried=prepared.carried, topic=self._topic(prepared, cited))
+                      carried=prepared.carried, topic=self._topic(prepared, cited),
+                      cached=prepared.cached)
 
     def _topic(self, prepared: Prepared, cited: list[int]) -> tuple[str, ...]:
         """Soruda adı geçen alanlar; hiç ad geçmiyorsa cevabın atıf yaptığı tek alan."""

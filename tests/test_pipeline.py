@@ -1,3 +1,5 @@
+import pytest
+
 from miras.prompts import (ABSTAIN_SENTENCE, EMPTY_QUESTION_MESSAGE, build_messages, cited_indices,
                            is_abstention, strip_invalid_citations)
 
@@ -118,3 +120,52 @@ def test_citation_helpers():
     assert cited_indices("a [K2] b [K1; K2] c [K5]", 3) == [1, 0]
     assert strip_invalid_citations("x [K4].", 3) == "x."
     assert build_messages("s", [])[1]["content"].count("SORU: s") == 1
+
+
+@pytest.fixture
+def cached(assistant, store):
+    assistant.cache = store
+    return assistant
+
+
+def test_repeated_question_comes_from_cache(cached, backend):
+    backend.reply = "Efes İzmir'dedir [K1]."
+    first = cached.ask("Efes nerede?")
+    second = cached.ask("Efes nerede?")
+    assert len(backend.chat_calls) == 1
+    assert not first.cached and second.cached
+    assert second.text == first.text and second.cited == first.cited
+
+
+def test_cache_misses_when_prompt_changes(cached, backend):
+    first = cached.ask("Göbeklitepe hangi ilde?")
+    cached.ask("Efes nerede?")
+    # Aynı metin, ama taşınan konu yüzünden modele giden soru farklı.
+    cached.ask("Peki ne zaman listeye girdi?")
+    cached.ask("Peki ne zaman listeye girdi?", first)
+    assert len(backend.chat_calls) == 4
+
+
+def test_cached_answer_is_validated_again(cached, backend, store):
+    backend.reply = "ilk"
+    cached.ask("Efes nerede?")
+    key = store.conn.execute("SELECT key FROM answer_cache").fetchone()[0]
+    store.cache_answer(key, "Efes İzmir'dedir [K1, K9].")
+    answer = cached.ask("Efes nerede?")
+    assert answer.cached and answer.text == "Efes İzmir'dedir [K1]."
+
+
+def test_refusals_and_disabled_cache_skip_storage(cached, backend, settings, store):
+    import dataclasses
+    cached.ask("Pizza hamuru tarifi nedir?")
+    assert store.conn.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0] == 0
+    cached.settings = dataclasses.replace(settings, answer_cache=False)
+    cached.ask("Efes nerede?")
+    cached.ask("Efes nerede?")
+    assert len(backend.chat_calls) == 2 and not cached.ask("Efes nerede?").cached
+
+
+def test_interrupted_stream_is_not_cached(cached, backend, store):
+    prepared = cached.prepare("Efes nerede?")
+    next(cached.generate(prepared))  # akış yarıda bırakılıyor
+    assert store.conn.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0] == 0

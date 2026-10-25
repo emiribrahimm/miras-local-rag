@@ -44,6 +44,10 @@ class Settings:
     # Konu dışı sorular 0.31–0.44 aldı; `python main.py calibrate` ile ölçülmesi önerilir.
     followup_min_similarity: float = float(_env("FOLLOWUP_MIN_SIMILARITY", "0.40"))
 
+    # Cevap önbelleği: aynı model, ayarlar ve aynı prompt (soru + getirilen parçalar) için ham
+    # model çıktısı SQLite'ta saklanır ve tekrar sorulduğunda model çağrılmaz. "0" = kapalı.
+    answer_cache: bool = _env("ANSWER_CACHE", "1") != "0"
+
     temperature: float = 0.0
     max_output_tokens: int = 400
     seed: int = 42
