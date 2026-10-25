@@ -1,5 +1,6 @@
 import pytest
 
+from miras.pipeline import refers_back
 from miras.prompts import (ABSTAIN_SENTENCE, EMPTY_QUESTION_MESSAGE, build_messages, cited_indices,
                            is_abstention, strip_invalid_citations)
 
@@ -97,6 +98,29 @@ def test_follow_up_floor_zero_always_carries(assistant, backend, settings):
     answer = assistant.ask("Pizza hamuru tarifi nedir?", first)
     # Eski davranış: alan adı eklenince konu dışı soru da kapıyı geçiyor.
     assert answer.carried == ("Göbeklitepe",) and not answer.refused
+
+
+def test_refers_back_words():
+    for question in ("Orası ne zaman yapılmış?", "Oradaki tiyatro kaç kişilik?", "Burasi kac yasinda?",
+                     "Onun mimarı kim?", "Peki hangisi daha eski?", "Kendisi ne zaman öldü?"):
+        assert refers_back(question), question
+    for question in ("Peki ne zaman yapılmış?", "Nüfus oranı nedir?", "Bir anı defteri", "On yıl sürdü",
+                     "Ya giriş ücreti?", "Ondalık sayılar", "Onur kimdir?"):
+        assert not refers_back(question), question
+
+
+def test_refers_back_carries_topic_below_floor(assistant, backend, settings):
+    import dataclasses
+    assistant.settings = dataclasses.replace(settings, followup_min_similarity=0.99)
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    assert assistant.ask("Orası ne zaman listeye girdi?", first).carried == ("Göbeklitepe",)
+    assert assistant.ask("Peki ne zaman listeye girdi?", first).carried == ()
+
+
+def test_refers_back_with_site_name_switches_topic(assistant, backend):
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    answer = assistant.ask("Peki Efes'teki tiyatro onun kadar eski mi?", first)
+    assert answer.carried == () and answer.topic == ("Efes",)
 
 
 def test_bm25_weight_from_settings_reaches_search(assistant, settings, monkeypatch):

@@ -13,10 +13,28 @@ from .backends import Backend, Message
 from .config import Settings
 from .prompts import (ABSTAIN_SENTENCE, EMPTY_QUESTION_MESSAGE, build_messages, cited_indices,
                       is_abstention, strip_invalid_citations)
-from .retrieval import Hit, Retriever
+from .retrieval import _ASCII, Hit, Retriever, _fold
 from .store import Store
 
 MAX_QUESTION_CHARS = 1000
+
+# Önceki konuya açıkça gönderme yapan kelimeler ("orası", "oradaki", "onun", "hangisi").
+# Türkçe karaktersiz yazılır, soru da öyle katlanarak aranır. "oran", "oranı", "anı" gibi
+# kelimeler eşleşmesin diye ekler tek tek sayılır; "oranın" iki anlamlı olduğu için yok.
+_REFERS_BACK = re.compile(
+    r"(?<!\w)(?:"
+    r"(?:ora|bura)(?:si|sina|sini|sinin|sinda|sindaki|sindan|da|daki|dan|ya|yi|lari|larda|lardaki)"
+    r"|(?:on|bun|sun)(?:un|u|a|da|dan|lar|lari|larin)"
+    r"|hangisi\w*|kendisi\w*"
+    r")(?!\w)")
+
+
+def refers_back(question: str) -> bool:
+    """Soru önceki konuya bir gönderme kelimesiyle mi bağlanıyor ("Orası ne zaman yapılmış?").
+
+    "Peki" ve "ya" tek başına sayılmaz; "Peki Türk kahvesi nasıl pişirilir?" konu dışı kalmalı.
+    """
+    return _REFERS_BACK.search(_fold(question).translate(_ASCII)) is not None
 
 
 @dataclass
@@ -69,9 +87,12 @@ class Assistant:
         # ("Peki ne zaman yapılmış?" -> "Selimiye Camii hakkında: Peki ne zaman yapılmış?").
         # Bu metin hem aramada hem de modele giden soruda kullanılır. Soru tek başına hiçbir
         # parçaya benzemiyorsa (konu dışı) konu taşınmaz: alan adı onu kapıdan geçirmesin.
+        # "Orası", "onun" gibi açık bir gönderme varsa benzerliğe bakılmaz; kısa sorular
+        # embedding'de zayıf kalıp tabanın altına düşebiliyor.
         carried: tuple[str, ...] = ()
         if (previous and previous.topic and not self.retriever.mentioned_titles(question)
-                and self.retriever.best_score(vector) >= self.settings.followup_min_similarity):
+                and (refers_back(question) or self.retriever.best_score(vector)
+                     >= self.settings.followup_min_similarity)):
             carried = previous.topic
             question = f"{', '.join(carried)} hakkında: {question}"
             vector = self.backend.embed_query(question)
