@@ -50,6 +50,11 @@ A few things I added after looking at where it went wrong:
   because I haven't measured it on the real models yet: `tune-hybrid` tries a few weights on the
   eval questions (no chat model needed) and suggests one for `MIRAS_BM25_WEIGHT`. The threshold
   still looks at the plain embedding similarity.
+- Answers are cached in the same SQLite file. The key is the full prompt (question plus the
+  retrieved chunks) together with the model and generation settings, so asking the same thing
+  again returns instantly, and changing a document, the prompt or the model just misses the cache.
+  The raw output is stored and still goes through the citation checks. `eval` never uses it,
+  `ingest --rebuild` clears it and `MIRAS_ANSWER_CACHE=0` turns it off.
 
 The design notes from the start of the project are in `docs/superpowers/specs/`.
 
@@ -88,7 +93,7 @@ uv run pytest                               # no models needed, ~1s
 
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
-`MIRAS_FOLLOWUP_MIN_SIMILARITY` or `MIRAS_DOCS_DIR`. If you change the
+`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE` or `MIRAS_DOCS_DIR`. If you change the
 embedding model you'll need `ingest --rebuild`.
 
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
@@ -127,7 +132,7 @@ model.
 
 ## Limitations
 
-- It's slow. ~14 s per answer on CPU, although streaming helps a bit. There's a GPU option
+- It's slow. ~14 s per answer on CPU, although streaming helps a bit (repeated questions come from the cache). There's a GPU option
   (`--device gpu` or `MIRAS_CHAT_DEVICE=gpu`) but I haven't tested or measured it.
 - Follow-ups only carry over the site, not the rest of the conversation. Whether a follow-up is
   off-topic is decided by one similarity floor, so a short, vague follow-up ("Peki hangisi?") can
@@ -185,6 +190,11 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   ölçmediğim için varsayılan olarak kapalı: `tune-hybrid` birkaç ağırlığı test sorularında deneyip
   (sohbet modeli gerekmez) `MIRAS_BM25_WEIGHT` için bir değer öneriyor. Eşik yine sadece embedding
   benzerliğine bakıyor.
+- Cevaplar aynı SQLite dosyasında önbelleğe alınıyor. Anahtar modele giden prompt'un tamamı (soru
+  ve getirilen parçalar) ile model ve üretim ayarları; yani aynı soru tekrar sorulunca cevap anında
+  geliyor, doküman, prompt ya da model değişince de önbellek kendiliğinden ıskalıyor. Ham çıktı
+  saklandığı için atıf kontrolleri yine çalışıyor. `eval` önbelleği kullanmıyor, `ingest --rebuild`
+  temizliyor, `MIRAS_ANSWER_CACHE=0` kapatıyor.
 
 ### Kurulum
 
@@ -220,7 +230,7 @@ uv run pytest                               # model gerekmez, ~1 sn
 ```
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
-`MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
+`MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
 `ingest --rebuild` çalıştırmak gerekiyor.
 
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
@@ -260,7 +270,7 @@ raporda.
 
 ### Eksikler
 
-- Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor.
+- Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor (tekrar eden sorular önbellekten geliyor).
   GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
 - Takip sorularında sadece alan taşınıyor, sohbetin geri kalanı değil. Sorunun konu dışı olup
   olmadığına tek bir benzerlik eşiği karar veriyor; "Peki hangisi?" gibi kısa ve belirsiz bir takip
