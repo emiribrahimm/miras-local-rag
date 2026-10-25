@@ -187,3 +187,21 @@ def test_uploaded_file_is_picked_up_by_ingest(store, backend, settings):
     report = ingest(store, backend, settings)
     assert report.added == ["ani.md"] and len(report.unchanged) == 2
     assert "Ani" in {c.title for c in Retriever(store, backend.embed_model).chunks}
+
+
+def test_answer_cache_round_trip_and_rebuild_clears_it(store, backend, settings):
+    assert store.cached_answer("k") is None
+    store.cache_answer("k", "Efes İzmir'dedir [K1].")
+    store.cache_answer("k", "Efes Selçuk'tadır [K1].")
+    assert store.cached_answer("k") == "Efes Selçuk'tadır [K1]."
+    ingest(store, backend, settings, rebuild=True)
+    assert store.cached_answer("k") is None
+
+
+def test_answer_cache_keeps_only_newest_entries(store, monkeypatch):
+    import miras.store
+
+    monkeypatch.setattr(miras.store, "MAX_CACHED_ANSWERS", 2)
+    for key in ("a", "b", "c"):
+        store.cache_answer(key, key)
+    assert [store.cached_answer(k) for k in ("a", "b", "c")] == [None, "b", "c"]

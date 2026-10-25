@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -26,7 +27,15 @@ CREATE TABLE IF NOT EXISTS chunks (
     embedding BLOB NOT NULL            -- float32, L2-normalize edilmiş
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS answer_cache (
+    key     TEXT PRIMARY KEY,          -- model, ayarlar ve prompt mesajlarının özeti
+    answer  TEXT NOT NULL,             -- doğrulanmamış ham model çıktısı
+    created REAL NOT NULL
+);
 """
+
+# Önbellekte tutulan en fazla cevap; aşılınca en eskiler silinir.
+MAX_CACHED_ANSWERS = 1000
 
 
 @dataclass(frozen=True)
@@ -75,7 +84,7 @@ class Store:
         self.conn.commit()
 
     def clear(self) -> None:
-        self.conn.executescript("DELETE FROM documents; DELETE FROM meta;")
+        self.conn.executescript("DELETE FROM documents; DELETE FROM meta; DELETE FROM answer_cache;")
         self.conn.commit()
 
     def add_document(self, filename: str, title: str, source_url: str, fingerprint: str,
@@ -91,6 +100,18 @@ class Store:
                 "INSERT INTO chunks(doc_id, position, section, text, embedding) VALUES(?, ?, ?, ?, ?)",
                 [(doc_id, i, sections[i], texts[i], embeddings[i].astype(np.float32).tobytes())
                  for i in range(len(texts))])
+
+    # --- cevap önbelleği ---------------------------------------------------
+    def cached_answer(self, key: str) -> str | None:
+        row = self.conn.execute("SELECT answer FROM answer_cache WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def cache_answer(self, key: str, answer: str) -> None:
+        with self.conn:
+            self.conn.execute("INSERT OR REPLACE INTO answer_cache(key, answer, created) VALUES(?, ?, ?)",
+                              (key, answer, time.time()))
+            self.conn.execute("DELETE FROM answer_cache WHERE key NOT IN (SELECT key FROM answer_cache "
+                              "ORDER BY created DESC, rowid DESC LIMIT ?)", (MAX_CACHED_ANSWERS,))
 
     # --- okuma ------------------------------------------------------------
     def counts(self) -> tuple[int, int]:
