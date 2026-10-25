@@ -69,3 +69,11 @@ def test_uploaded_doc_is_indexed_and_searchable(app, settings):
 
     app.chat_input[0].set_value("Ani hangi ilde?").run()
     assert "[K1] Ani" in app.expander[0].label
+
+
+def test_download_button_follows_history(app):
+    button = app.sidebar.get("download_button")[0]
+    assert button.proto.label == "Sohbeti indir (.md)" and button.proto.disabled
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert not app.exception
+    assert not app.sidebar.get("download_button")[0].proto.disabled

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 
 import streamlit as st
 
 from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
+from miras.export import conversation_markdown
 from miras.ingest import ingest, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
@@ -121,6 +123,11 @@ with st.sidebar:
     clicked = next((q for q in EXAMPLES if st.button(q, use_container_width=True)), None)
     if st.button("Sohbeti temizle"):
         st.session_state.history = []
+    turns = st.session_state.get("history", [])
+    now = datetime.now()
+    st.download_button("Sohbeti indir (.md)", conversation_markdown(turns, SETTINGS, now) if turns else "",
+                       file_name=f"miras-sohbet-{now:%Y%m%d-%H%M}.md", mime="text/markdown",
+                       disabled=not turns, help="Sorular, cevaplar ve kaynaklarıyla birlikte")
 
 history: list[tuple[str, Answer]] = st.session_state.setdefault("history", [])
 for question, past in history:
