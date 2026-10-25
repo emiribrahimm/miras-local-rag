@@ -94,6 +94,9 @@ uv run python main.py eval                  # run the question set, writes to re
 uv run pytest                               # no models needed, ~1s
 ```
 
+In the web UI, "Sohbeti indir (.md)" in the sidebar saves the conversation as a Markdown file,
+with the cited chunks and their Wikipedia links under each answer.
+
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
 `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE` or `MIRAS_DOCS_DIR`. If you change the
@@ -236,6 +239,9 @@ uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlı�
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
 uv run pytest                               # model gerekmez, ~1 sn
 ```
+
+Web arayüzünde kenar çubuğundaki "Sohbeti indir (.md)" sohbeti Markdown dosyası olarak kaydediyor;
+her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor.
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
 `MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
