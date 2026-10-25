@@ -1,6 +1,7 @@
 """Streamlit arayüzünü gerçek model olmadan uçtan uca çalıştırır."""
 
 import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from miras import config
@@ -15,7 +16,11 @@ def app(store, settings, monkeypatch):
     fake = FakeBackend("Efes İzmir'dedir [K1].")
     monkeypatch.setattr(config, "SETTINGS", settings)
     monkeypatch.setattr(miras.backends, "FoundryBackend", lambda *args, **kwargs: fake)
-    return AppTest.from_file(str(config.ROOT / "app.py"), default_timeout=30).run()
+    # Asistan süreç boyunca önbellekte kalır; her test kendi veritabanı ve sahte modeliyle başlasın.
+    st.cache_resource.clear()
+    app = AppTest.from_file(str(config.ROOT / "app.py"), default_timeout=30).run()
+    app.fake = fake
+    return app
 
 
 def test_answer_and_sources_are_rendered(app):
@@ -24,6 +29,16 @@ def test_answer_and_sources_are_rendered(app):
     assert not app.exception
     assert app.chat_message[1].markdown[0].value == "Efes İzmir'dedir [K1]."
     assert "[K1] Efes" in app.expander[0].label
+
+
+def test_repeated_question_is_answered_from_cache(app):
+    app.chat_input[0].set_value("Efes nerede?").run()
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert not app.exception
+    assert len(app.fake.chat_calls) == 1
+    assert app.chat_message[3].markdown[0].value == "Efes İzmir'dedir [K1]."
+    assert any("önbellekten" in c.value for c in app.chat_message[3].caption)
+    assert not any("önbellekten" in c.value for c in app.chat_message[1].caption)
 
 
 def test_out_of_scope_question_shows_refusal(app):

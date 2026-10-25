@@ -27,9 +27,10 @@ st.set_page_config(page_title="Miras — yerel RAG asistanı", page_icon="🏛�
 def load_assistant() -> Assistant:
     # Yeniden çalıştırmalarda modeller tekrar yüklenmesin diye tek örnek önbellekte tutulur.
     backend = FoundryBackend(SETTINGS.chat_model, SETTINGS.embed_model, SETTINGS.chat_device)
-    retriever = Retriever(Store(SETTINGS.db_path), backend.embed_model)
+    store = Store(SETTINGS.db_path)
+    retriever = Retriever(store, backend.embed_model)
     backend.embed_query("ısınma")  # embedding modelini şimdiden yükle
-    return Assistant(backend, retriever, SETTINGS)
+    return Assistant(backend, retriever, SETTINGS, cache=store)
 
 
 def index_uploads(assistant: Assistant, uploads: list[tuple[str, bytes]]) -> None:
@@ -84,7 +85,9 @@ def render_sources(answer: Answer, show_all: bool) -> None:
                            f"({hit.chunk.filename}, CC BY-SA 4.0)")
     if answer.carried:
         st.caption(f"↪ Önceki sorudan devam: {', '.join(answer.carried)}")
-    if not answer.refused:
+    if answer.cached:
+        st.caption(f"⏱️ arama {answer.retrieval_seconds:.2f} sn · ⚡ önbellekten, model çağrılmadı")
+    elif not answer.refused:
         st.caption(f"⏱️ arama {answer.retrieval_seconds:.2f} sn · üretim {answer.generation_seconds:.1f} sn")
 
 

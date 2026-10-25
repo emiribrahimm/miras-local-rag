@@ -25,9 +25,11 @@ def _backend(settings: Settings) -> FoundryBackend:
                           on_status=_status)
 
 
-def _assistant(settings: Settings) -> Assistant:
+def _assistant(settings: Settings, cache: bool = True) -> Assistant:
     backend = _backend(settings)
-    return Assistant(backend, Retriever(Store(settings.db_path), backend.embed_model), settings)
+    store = Store(settings.db_path)
+    return Assistant(backend, Retriever(store, backend.embed_model), settings,
+                     cache=store if cache else None)
 
 
 def _print_sources(answer: Answer, verbose: bool) -> None:
@@ -57,7 +59,8 @@ def _answer_streaming(assistant: Assistant, question: str, verbose: bool,
     answer = assistant.finalize(prepared, "".join(pieces), time.perf_counter() - started)
     _print_sources(answer, verbose)
     if verbose:
-        print(f"\n(arama {answer.retrieval_seconds:.2f} sn, üretim {answer.generation_seconds:.2f} sn)")
+        generation = "önbellekten" if answer.cached else f"üretim {answer.generation_seconds:.2f} sn"
+        print(f"\n(arama {answer.retrieval_seconds:.2f} sn, {generation})")
     return answer
 
 
@@ -151,7 +154,8 @@ def cmd_tune_hybrid(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
-    assistant = _assistant(settings)
+    # Önbellek kapalı: süreler ve cevaplar her çalıştırmada modelden ölçülsün.
+    assistant = _assistant(settings, cache=False)
     questions = evaluation.load_questions(ROOT / "data" / "eval" / "questions.json")
     retrieval = evaluation.retrieval_summary(evaluation.evaluate_retrieval(
         questions, assistant.backend, assistant.retriever, settings.top_k, settings.bm25_weight))
