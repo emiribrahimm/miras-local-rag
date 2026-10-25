@@ -50,11 +50,12 @@ def test_follow_up_floor_scores_use_standalone_questions(store, backend):
         {"id": "f1", "type": "answerable", "turns": ["Göbeklitepe nerede?", "Peki ne zaman listeye girdi?"]},
         {"id": "f2", "type": "answerable", "switch": True, "turns": ["Göbeklitepe nerede?", "Efes nerede?"]},
         {"id": "f3", "type": "out_of_domain", "turns": ["Göbeklitepe nerede?", "Pizza hamuru tarifi nedir?"]},
+        {"id": "f4", "type": "answerable", "turns": ["Göbeklitepe nerede?", "Orası ne zaman listeye girdi?"]},
     ]
     questions = [{"id": "o1", "type": "out_of_domain", "split": "dev", "question": "Mars'ın kaç uydusu var?"},
                  {"id": "a1", "type": "answerable", "split": "dev", "question": "Efes nerede?"}]
     keep, block = followup_floor_scores(followups, questions, backend, Retriever(store, backend.embed_model))
-    assert len(keep) == 1 and keep[0] > 0  # konu değiştiren f2 sayılmaz
+    assert len(keep) == 1 and keep[0] > 0  # konu değiştiren f2 ve gönderme kelimeli f4 sayılmaz
     assert block == [0.0, 0.0]
 
 

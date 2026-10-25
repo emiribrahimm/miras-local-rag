@@ -17,5 +17,10 @@
   {"id": "f16", "type": "out_of_domain", "turns": ["Göbeklitepe hangi ilde bulunuyor?", "Python'da bir liste nasıl sıralanır?"]},
   {"id": "f17", "type": "out_of_domain", "turns": ["Selimiye Camii'nin mimarı kimdir?", "Türk kahvesi nasıl pişirilir?"]},
   {"id": "f18", "type": "out_of_domain", "turns": ["Troya hangi yıldan beri Dünya Mirası listesinde?", "Fransa'nın başkenti neresidir?"]},
-  {"id": "f19", "type": "out_of_domain", "turns": ["Pamukkale hangi ilde yer alır?", "Mars'ın kaç uydusu vardır?"]}
+  {"id": "f19", "type": "out_of_domain", "turns": ["Pamukkale hangi ilde yer alır?", "Mars'ın kaç uydusu vardır?"]},
+  {"id": "f20", "type": "answerable", "doc": "divrigi-ulu-camii.md", "turns": ["Divriği Ulu Camii hangi yıl Dünya Mirası listesine alındı?", "Onu kim yaptırdı?"], "expected": [["Ahmed Şah", "Ahmet Şah"]]},
+  {"id": "f21", "type": "answerable", "doc": "catalhoyuk.md", "turns": ["Çatalhöyük'ü kim keşfetti?", "Orası hangi yıl Dünya Mirası listesine girdi?"], "expected": [["2012"]]},
+  {"id": "f22", "type": "answerable", "doc": "pamukkale.md", "turns": ["Pamukkale hangi ilde yer alır?", "Peki orası ne zaman listeye eklendi?"], "expected": [["1988"]]},
+  {"id": "f23", "type": "near_miss", "turns": ["Göbeklitepe hangi ilde bulunuyor?", "Orada yarın hava nasıl olacak?"]},
+  {"id": "f24", "type": "out_of_domain", "turns": ["Selimiye Camii'nin mimarı kimdir?", "Peki ekmek hamuru nasıl mayalanır?"]}
 ]
