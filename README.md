@@ -44,7 +44,10 @@ A few things I added after looking at where it went wrong:
   off-topic questions ("Python'da liste nasıl sıralanır?") over the threshold, so the topic is
   only carried if the question on its own scores at least 0.40 against some chunk
   (`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `calibrate` suggests a value). Off-topic questions in the eval
-  set scored 0.31–0.44, so 0.40 is a cautious first guess, not a measured one yet.
+  set scored 0.31–0.44, so 0.40 is a cautious first guess, not a measured one yet. Short
+  follow-ups can score below that too, so if the question points back with a word like "orası",
+  "oradaki", "onun" or "hangisi" the topic is carried without checking the floor. "Peki" alone
+  doesn't count, otherwise "Peki ekmek hamuru nasıl mayalanır?" would get the site name too.
 - There's an optional keyword score (BM25 over word stems, the first 5 letters of each word) that
   can be added to the ranking, for dates and rare names the embeddings miss. It's off by default
   because I haven't measured it on the real models yet: `tune-hybrid` tries a few weights on the
@@ -123,8 +126,8 @@ with every answer is in [`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-
 Take that with a grain of salt though. It's a small set I wrote myself, and scoring is keyword
 based, so it says more about this kind of question than about the system in general.
 
-There's also a small follow-up set in `data/eval/followups.json`: 19 two-turn conversations where
-only the second question is scored (13 answerable, 6 that should be refused, 4 of them off-topic). `eval` runs it after
+There's also a small follow-up set in `data/eval/followups.json`: 24 two-turn conversations where
+only the second question is scored (16 answerable, 8 that should be refused, 5 of them off-topic). `eval` runs it after
 the main set and adds a section to the report that also shows where the right document would have
 ranked if the follow-up had been asked on its own. The report above predates it, so rerun `eval`
 to get those numbers, including how many off-topic follow-ups were refused without calling the
@@ -135,8 +138,10 @@ model.
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit (repeated questions come from the cache). There's a GPU option
   (`--device gpu` or `MIRAS_CHAT_DEVICE=gpu`) but I haven't tested or measured it.
 - Follow-ups only carry over the site, not the rest of the conversation. Whether a follow-up is
-  off-topic is decided by one similarity floor, so a short, vague follow-up ("Peki hangisi?") can
-  score below it and lose the topic, and a borderline off-topic one can still get through.
+  off-topic is decided by one similarity floor plus a short list of words that point back, so a
+  short follow-up without one ("Peki ne zaman?") can score below the floor and lose the topic, and
+  an off-topic one that happens to use one ("Orada yarın hava nasıl?") gets the site name and has
+  to be refused by the model.
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
   bigger typos like "Gbeklitpe" fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/`.
@@ -184,7 +189,10 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   liste nasıl sıralanır?") eşiğin üstüne taşıyabildiği için konu ancak soru kendi başına bir
   parçayla en az 0.40 benzerlik alıyorsa taşınıyor (`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `calibrate` bir
   değer öneriyor). Değerlendirmedeki konu dışı sorular 0.31–0.44 aldı; 0.40 henüz ölçülmüş değil,
-  temkinli bir başlangıç değeri.
+  temkinli bir başlangıç değeri. Kısa takip soruları da bu değerin altında kalabildiği için soru
+  "orası", "oradaki", "onun", "hangisi" gibi bir kelimeyle öncekine gönderme yapıyorsa konu eşiğe
+  bakılmadan taşınıyor. Tek başına "Peki" sayılmıyor; yoksa "Peki ekmek hamuru nasıl mayalanır?"
+  sorusuna da alan adı eklenirdi.
 - İsteğe bağlı bir anahtar kelime skoru var (kelimelerin ilk 5 harfi üzerinden BM25). Embedding'in
   kaçırdığı tarih ve nadir isimler için sıralamaya eklenebiliyor. Gerçek modellerle henüz
   ölçmediğim için varsayılan olarak kapalı: `tune-hybrid` birkaç ağırlığı test sorularında deneyip
@@ -261,8 +269,8 @@ Model çağrılan sorularda ortanca süre 14 saniye civarı. Soru soru cevaplar�
 Bu sonucu fazla büyütmemek lazım: set küçük, soruları ben yazdım ve puanlama anahtar kelimeye
 dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğru cevap vereceğini değil.
 
-Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 19 iki turluk sohbet,
-sadece ikinci soru puanlanıyor (13'ü cevaplanabilir, 6'sı reddedilmeli, bunların 4'ü konu dışı). `eval` bunları ana setten
+Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 24 iki turluk sohbet,
+sadece ikinci soru puanlanıyor (16'sı cevaplanabilir, 8'i reddedilmeli, bunların 5'i konu dışı). `eval` bunları ana setten
 sonra çalıştırıp rapora ayrı bir bölüm ekliyor; takip sorusu tek başına sorulsaydı doğru dokümanın
 kaçıncı sırada geleceği de orada. Yukarıdaki rapor bu setten önce üretildi, rakamlar için `eval`
 yeniden çalıştırılmalı. Konu dışı takip sorularından kaçının model çağrılmadan reddedildiği de
@@ -273,8 +281,10 @@ raporda.
 - Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor (tekrar eden sorular önbellekten geliyor).
   GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
 - Takip sorularında sadece alan taşınıyor, sohbetin geri kalanı değil. Sorunun konu dışı olup
-  olmadığına tek bir benzerlik eşiği karar veriyor; "Peki hangisi?" gibi kısa ve belirsiz bir takip
-  sorusu eşiğin altında kalıp konuyu kaybedebilir, sınırda bir konu dışı soru da geçebilir.
+  olmadığına tek bir benzerlik eşiği ve kısa bir gönderme kelimeleri listesi karar veriyor; "Peki ne
+  zaman?" gibi bu kelimelerden birini içermeyen kısa bir soru eşiğin altında kalıp konuyu
+  kaybedebilir, birini içeren konu dışı bir soru ("Orada yarın hava nasıl?") ise alan adını alıp
+  modelin reddetmesine kalır.
 - Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
   gibi daha büyük hatalarda sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
