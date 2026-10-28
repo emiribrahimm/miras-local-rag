@@ -65,6 +65,25 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
     return report
 
 
+def _valid_doc_name(name: str) -> str | None:
+    """Klasör dışına çıkamayan, gizli olmayan bir .md/.txt dosya adı; uygun değilse None."""
+    filename = Path(name).name  # "../x.md" gibi yollar klasör dışına yazamasın
+    if filename != name or filename.startswith(".") or Path(filename).suffix.lower() not in DOC_SUFFIXES:
+        return None
+    return filename
+
+
+def remove_document(store: Store, docs_dir: Path, filename: str) -> None:
+    """Dokümanı klasörden siler ve parçalarını indeksten kaldırır; yeniden gömme gerekmez.
+
+    Dosya diskte yoksa yalnızca indeks temizlenir.
+    """
+    if _valid_doc_name(filename) is None:
+        raise ValueError(f"{filename}: geçersiz doküman adı.")
+    (docs_dir / filename).unlink(missing_ok=True)
+    store.delete_document(filename)
+
+
 def save_uploads(docs_dir: Path, uploads: list[tuple[str, bytes]]) -> tuple[list[str], list[str]]:
     """Arayüzden yüklenen dosyaları doküman klasörüne yazar; (kaydedilenler, hatalar) döner.
 
@@ -73,8 +92,8 @@ def save_uploads(docs_dir: Path, uploads: list[tuple[str, bytes]]) -> tuple[list
     saved: list[str] = []
     errors: list[str] = []
     for name, data in uploads:
-        filename = Path(name).name  # "../x.md" gibi yollar klasör dışına yazamasın
-        if filename.startswith(".") or Path(filename).suffix.lower() not in DOC_SUFFIXES:
+        filename = _valid_doc_name(Path(name).name)
+        if filename is None:
             errors.append(f"{name}: yalnızca .md ve .txt dosyaları eklenebilir.")
             continue
         if not data.strip():

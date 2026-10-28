@@ -205,3 +205,29 @@ def test_answer_cache_keeps_only_newest_entries(store, monkeypatch):
     for key in ("a", "b", "c"):
         store.cache_answer(key, key)
     assert [store.cached_answer(k) for k in ("a", "b", "c")] == [None, "b", "c"]
+
+
+def test_remove_document_deletes_file_and_chunks(store, backend, settings):
+    from miras.ingest import remove_document
+    remove_document(store, settings.docs_dir, "efes.md")
+    assert not (settings.docs_dir / "efes.md").exists()
+    assert store.counts() == (1, 2) and "efes.md" not in store.fingerprints()
+    report = ingest(store, backend, settings)
+    assert report.added == [] and report.removed == []
+
+
+def test_remove_document_cleans_index_when_file_is_gone(store, settings):
+    from miras.ingest import remove_document
+    (settings.docs_dir / "efes.md").unlink()
+    remove_document(store, settings.docs_dir, "efes.md")
+    assert "efes.md" not in store.fingerprints()
+
+
+def test_remove_document_rejects_bad_names(store, settings, tmp_path):
+    from miras.ingest import remove_document
+    outside = tmp_path / "disari.md"
+    outside.write_text("x", encoding="utf-8")
+    for name in ("../disari.md", "notlar.py", ".gizli.md"):
+        with pytest.raises(ValueError):
+            remove_document(store, settings.docs_dir, name)
+    assert outside.exists() and store.counts() == (2, 3)
