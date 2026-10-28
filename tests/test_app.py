@@ -77,3 +77,25 @@ def test_download_button_follows_history(app):
     app.chat_input[0].set_value("Efes nerede?").run()
     assert not app.exception
     assert not app.sidebar.get("download_button")[0].proto.disabled
+
+
+def test_deleted_doc_leaves_list_and_search(app, settings):
+    assert "- Efes (1 parça)" in app.sidebar.markdown[1].value
+    app.sidebar.selectbox[0].set_value("efes.md")
+    next(b for b in app.sidebar.button if b.label == "Sil").click().run()
+    assert not app.exception
+    assert not (settings.docs_dir / "efes.md").exists()
+    assert "Silindi: efes.md" in app.sidebar.success[0].value
+    assert "Efes" not in app.sidebar.markdown[1].value
+
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert not any("efes.md" in e.label or "[K1] Efes" in e.label for e in app.expander)
+
+
+def test_last_doc_cannot_be_deleted(app, settings):
+    for name in ("efes.md", "gobeklitepe.md"):
+        app.sidebar.selectbox[0].set_value(name)
+        next(b for b in app.sidebar.button if b.label == "Sil").click().run()
+    assert not app.exception
+    assert "En az bir doküman kalmalı." in app.sidebar.error[0].value
+    assert (settings.docs_dir / "gobeklitepe.md").exists()

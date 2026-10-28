@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from datetime import datetime
 
 import streamlit as st
@@ -10,7 +11,7 @@ import streamlit as st
 from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
 from miras.export import conversation_markdown
-from miras.ingest import ingest, save_uploads
+from miras.ingest import ingest, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
 from miras.store import Store
@@ -64,6 +65,32 @@ def render_upload_result() -> None:
         st.error(error)
 
 
+def delete_document(assistant: Assistant, filename: str) -> None:
+    """Dokümanı klasörden ve indeksten siler, aramayı yeni indeksle yeniler."""
+    error = None
+    if len({c.filename for c in assistant.retriever.chunks}) <= 1:
+        error = "En az bir doküman kalmalı."  # boş indeksle arama yapılamaz
+    else:
+        store = Store(SETTINGS.db_path)
+        try:
+            remove_document(store, SETTINGS.docs_dir, filename)
+            assistant.retriever = Retriever(store, assistant.backend.embed_model)
+        except (ValueError, OSError, IndexError_) as err:
+            error = str(err)
+        finally:
+            store.close()
+    st.session_state.delete_result = (filename, error)
+    st.rerun()
+
+
+def render_delete_result() -> None:
+    filename, error = st.session_state.pop("delete_result", (None, None))
+    if error:
+        st.error(error)
+    elif filename:
+        st.success(f"Silindi: {filename}")
+
+
 def render_sources(answer: Answer, show_all: bool) -> None:
     if answer.refusal_reason == "empty":
         return
@@ -111,7 +138,10 @@ with st.sidebar:
                 f"eşik: {SETTINGS.min_similarity}")
     show_all = st.toggle("Getirilen tüm parçaları göster", value=False)
     st.subheader("Bilgi tabanı")
-    st.markdown("\n".join(f"- {title}" for title in sorted({c.title for c in assistant.retriever.chunks})))
+    chunk_counts = Counter(c.filename for c in assistant.retriever.chunks)
+    titles = {c.filename: c.title for c in assistant.retriever.chunks}
+    filenames = sorted(titles, key=lambda f: (titles[f], f))
+    st.markdown("\n".join(f"- {titles[f]} ({chunk_counts[f]} parça)" for f in filenames))
     with st.form("upload", clear_on_submit=True):
         uploads = st.file_uploader("Doküman ekle", type=["md", "txt"], accept_multiple_files=True,
                                    help="Başlık ve takma adlar için dosyanın başına README'deki "
@@ -119,6 +149,13 @@ with st.sidebar:
         if st.form_submit_button("İndeksle") and uploads:
             index_uploads(assistant, [(f.name, f.getvalue()) for f in uploads])
     render_upload_result()
+    with st.expander("Doküman sil"):
+        with st.form("delete"):
+            target = st.selectbox("Doküman", filenames, format_func=lambda f: f"{titles[f]} ({f})",
+                                  help="Dosya doküman klasöründen de silinir.")
+            if st.form_submit_button("Sil") and target:
+                delete_document(assistant, target)
+    render_delete_result()
     st.subheader("Örnek sorular")
     clicked = next((q for q in EXAMPLES if st.button(q, use_container_width=True)), None)
     if st.button("Sohbeti temizle"):
