@@ -104,7 +104,8 @@ embedding model you'll need `ingest --rebuild`.
 
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
 upload them from the web UI sidebar ("Doküman ekle"), which saves them there and indexes them
-right away. Only changed files get re-embedded. You'll probably want to rerun `calibrate` and update the topic
+right away. Only changed files get re-embedded. "Doküman sil" in the same sidebar removes a file
+from `data/docs/` and the index (nothing to re-embed), as long as at least one document is left. You'll probably want to rerun `calibrate` and update the topic
 description in `miras/prompts.py` too. An optional header at the top of a file sets the title and
 aliases:
 
@@ -250,7 +251,8 @@ Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
 `ingest` çalıştırmanız ya da web arayüzünün kenar çubuğundan ("Doküman ekle") yüklemeniz yeterli.
 Yüklenen dosyalar aynı klasöre kaydedilip hemen indeksleniyor, sadece değişen dosyalar yeniden
-işleniyor. Sonrasında `calibrate`
+işleniyor. Aynı yerdeki "Doküman sil" bir dosyayı `data/docs/`'tan ve indeksten kaldırıyor (yeniden
+gömme gerekmiyor); en az bir doküman kalması gerekiyor. Sonrasında `calibrate`
 ile eşiği tekrar ölçmek ve `miras/prompts.py` içindeki konu tanımını güncellemek iyi olur. Dosyanın
 başına başlık ve takma adlar için şöyle bir üst bilgi eklenebilir:
 
