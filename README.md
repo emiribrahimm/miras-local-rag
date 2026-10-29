@@ -58,6 +58,11 @@ A few things I added after looking at where it went wrong:
   again returns instantly, and changing a document, the prompt or the model just misses the cache.
   The raw output is stored and still goes through the citation checks. `eval` never uses it,
   `ingest --rebuild` clears it and `MIRAS_ANSWER_CACHE=0` turns it off.
+- Chunks are up to 1400 characters, so under each cited source the sentence that backs the answer
+  is picked out: highlighted in the web UI, quoted in the Markdown export and printed with `»` in
+  the CLI. Each answer sentence goes to the chunks its `[K1]` tags point at, and the chunk sentence
+  sharing the most word stems with it wins (numbers count double, words from the heading path don't
+  count). No model call. If nothing shares at least two stems or one number, nothing is highlighted.
 
 The design notes from the start of the project are in `docs/superpowers/specs/`.
 
@@ -225,6 +230,11 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   geliyor, doküman, prompt ya da model değişince de önbellek kendiliğinden ıskalıyor. Ham çıktı
   saklandığı için atıf kontrolleri yine çalışıyor. `eval` önbelleği kullanmıyor, `ingest --rebuild`
   temizliyor, `MIRAS_ANSWER_CACHE=0` kapatıyor.
+- Parçalar 1400 karaktere kadar çıkabildiği için atıf yapılan her kaynağın altında cevabı
+  destekleyen cümle ayrıca gösteriliyor: web arayüzünde vurgulu, Markdown dışa aktarımında alıntı,
+  CLI'da `»` ile. Cevabın her cümlesi `[K1]` etiketinin gösterdiği parçaya bağlanıyor ve parçada
+  onunla en çok kelime kökü paylaşan cümle seçiliyor (sayılar iki kat, başlık yolundaki kelimeler
+  hiç sayılmıyor). Model çağrısı yok. En az iki ortak kök ya da bir ortak sayı yoksa vurgu yapılmıyor.
 
 ### Kurulum
 
