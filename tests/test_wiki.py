@@ -100,3 +100,22 @@ def test_fetch_returns_query(monkeypatch):
     body = json.dumps({"query": fake_query()}).encode()
     monkeypatch.setattr(wiki.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(body))
     assert wiki.fetch("Sümela Manastırı")["pages"][0]["title"] == "Sümela Manastırı"
+
+
+def test_add_wiki_command_writes_and_indexes(store, backend, settings, monkeypatch, capsys):
+    import dataclasses
+
+    from miras import cli
+
+    monkeypatch.setattr(cli, "SETTINGS", dataclasses.replace(
+        cli.SETTINGS, docs_dir=settings.docs_dir, db_path=settings.db_path))
+    monkeypatch.setattr(cli, "_backend", lambda s: backend)
+    monkeypatch.setattr(wiki, "fetch", lambda title: fake_query())
+    assert cli.main(["add-wiki", "Sümela Manastırı", "--aliases", "Sumela"]) == 0
+    out = capsys.readouterr().out
+    assert "sumela-manastiri.md" in out and "Eklenen/güncellenen: 1" in out
+    assert "aliases: Sumela" in (settings.docs_dir / "sumela-manastiri.md").read_text(encoding="utf-8")
+    assert store.counts()[0] == 3
+
+    assert cli.main(["add-wiki", "https://en.wikipedia.org/wiki/Ani"]) == 1
+    assert "tr.wikipedia.org" in capsys.readouterr().err

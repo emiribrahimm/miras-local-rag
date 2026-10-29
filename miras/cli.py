@@ -1,4 +1,4 @@
-"""Komut satırı arayüzü: ingest, ask, chat, eval, calibrate, feedback."""
+"""Komut satırı arayüzü: ingest, add-wiki, ask, chat, eval, calibrate, feedback."""
 
 from __future__ import annotations
 
@@ -14,10 +14,11 @@ from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ROOT, SETTINGS, Settings
 from .feedback import eval_candidates
-from .ingest import ingest
+from .ingest import ingest, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import IndexError_, Retriever
 from .store import Store
+from .wiki import WikiError, article
 
 
 def _status(message: str) -> None:
@@ -75,6 +76,17 @@ def cmd_ingest(args: argparse.Namespace, settings: Settings) -> None:
     print(f"Eklenen/güncellenen: {len(report.added)}, değişmeyen: {len(report.unchanged)}, "
           f"silinen: {len(report.removed)}")
     print(f"Veritabanı: {docs} doküman, {chunks} parça -> {settings.db_path}")
+
+
+def cmd_add_wiki(args: argparse.Namespace, settings: Settings) -> None:
+    aliases = tuple(a.strip() for a in (args.aliases or "").split(",") if a.strip())
+    _status("Vikipedi'den indiriliyor...")
+    filename, text = article(args.article, aliases, docs_dir=settings.docs_dir)
+    _, errors = save_uploads(settings.docs_dir, [(filename, text.encode("utf-8"))])
+    if errors:
+        raise WikiError(errors[0])
+    print(f"{filename} -> {settings.docs_dir}")
+    cmd_ingest(argparse.Namespace(rebuild=False), settings)
 
 
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
@@ -233,6 +245,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rebuild", action="store_true", help="İndeksi sıfırdan kur")
     p.set_defaults(func=cmd_ingest)
 
+    p = sub.add_parser("add-wiki", help="Türkçe Vikipedi maddesini indir ve indeksle (internet gerekir)")
+    p.add_argument("article", help="Madde adı ya da tr.wikipedia.org bağlantısı")
+    p.add_argument("--aliases", help="Alanın başka adları, virgülle ayrılmış")
+    p.set_defaults(func=cmd_add_wiki)
+
     p = sub.add_parser("ask", help="Tek bir soru sor")
     p.add_argument("question")
     p.add_argument("-v", "--verbose", action="store_true", help="Parça metinlerini ve süreleri göster")
@@ -262,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = dataclasses.replace(SETTINGS, **{k: v for k, v in overrides.items() if v})
     try:
         args.func(args, settings)
-    except (BackendError, IndexError_, FileNotFoundError) as err:
+    except (BackendError, IndexError_, FileNotFoundError, WikiError) as err:
         print(f"Hata: {err}", file=sys.stderr)
         return 1
     return 0
