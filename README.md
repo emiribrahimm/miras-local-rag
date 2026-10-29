@@ -91,11 +91,19 @@ uv run python main.py ingest --rebuild
 uv run python main.py calibrate             # re-measure the similarity threshold
 uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
+uv run python main.py feedback              # thumbs down answers from the web UI
 uv run pytest                               # no models needed, ~1s
 ```
 
 In the web UI, "Sohbeti indir (.md)" in the sidebar saves the conversation as a Markdown file,
 with the cited chunks and their Wikipedia links under each answer.
+
+Each answer also gets a 👍/👎. Votes go into the same SQLite file with the question, the answer
+and the retrieved chunks (`ingest --rebuild` keeps them). `feedback` lists the 👎 ones (`--all`
+for everything), and `feedback --export reports/feedback-candidates.json` writes them in the
+`questions.json` format so they can be turned into eval questions. The vote doesn't say whether
+the right answer was a different one or a refusal, so `type` and `expected` are left to fill in;
+questions that carried a topic are marked with `carried` and belong in `followups.json`.
 
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
@@ -238,11 +246,19 @@ uv run python main.py ingest --rebuild
 uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
 uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
+uv run python main.py feedback              # web arayüzünde 👎 verilen cevaplar
 uv run pytest                               # model gerekmez, ~1 sn
 ```
 
 Web arayüzünde kenar çubuğundaki "Sohbeti indir (.md)" sohbeti Markdown dosyası olarak kaydediyor;
 her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor.
+
+Her cevabın altında bir de 👍/👎 var. Oylar soru, cevap ve getirilen parçalarla birlikte aynı SQLite
+dosyasına yazılıyor (`ingest --rebuild` silmiyor). `feedback` 👎 verilenleri listeliyor (hepsi için
+`--all`), `feedback --export reports/feedback-candidates.json` ise bunları `questions.json`
+biçiminde yazıyor; böylece test setine soru olarak eklenebiliyorlar. Oy, doğru davranışın başka bir
+cevap mı yoksa reddetmek mi olduğunu söylemediği için `type` ve `expected` elle dolduruluyor; konu
+taşınmış sorular `carried` alanıyla işaretli, onların yeri `followups.json`.
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
 `MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
