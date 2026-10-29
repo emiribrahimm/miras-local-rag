@@ -46,6 +46,8 @@ def _print_sources(answer: Answer, verbose: bool) -> None:
     for i in shown:
         hit = answer.hits[i]
         print(f"  [K{i + 1}] {hit.chunk.section}  ({hit.chunk.filename}, benzerlik {hit.score:.2f})")
+        for sentence in answer.support.get(i, []):
+            print(f"       » {sentence}")
         if verbose:
             print(f"       {hit.chunk.text[:300]}...")
 

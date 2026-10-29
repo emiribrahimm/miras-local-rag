@@ -11,6 +11,7 @@ def test_grounded_answer_keeps_valid_citations(assistant, backend):
     assert not answer.refused
     assert answer.cited == [0]
     assert answer.sources[0].chunk.filename == "gobeklitepe.md"
+    assert answer.support == {0: ["Göbeklitepe 2018 yılında Dünya Mirası listesine girdi."]}
 
 
 def test_prompt_contains_labelled_context_and_question(assistant, backend):
@@ -37,7 +38,7 @@ def test_model_abstention_is_detected_and_cleaned(assistant, backend):
     backend.reply = "Maalesef bu bilgi elimdeki dokümanlardan yer almıyor. [K1]"
     answer = assistant.ask("Efes giriş ücreti ne kadar?")
     assert answer.refused and answer.refusal_reason == "model"
-    assert answer.text == ABSTAIN_SENTENCE and answer.cited == []
+    assert answer.text == ABSTAIN_SENTENCE and answer.cited == [] and answer.support == {}
 
 
 def test_hallucinated_citation_labels_are_removed(assistant, backend):

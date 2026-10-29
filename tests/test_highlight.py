@@ -58,3 +58,13 @@ def test_weak_overlap_or_no_tags_gives_nothing():
 def test_emphasize_wraps_first_occurrence():
     text = "Bir. İki. Bir."
     assert emphasize(text, ["Bir."], lambda s: f"**{s}**") == "**Bir.** İki. Bir."
+
+
+def test_cli_prints_supporting_sentence_under_source(assistant, backend, capsys):
+    from miras.cli import _print_sources
+
+    backend.reply = "Göbeklitepe 2018 yılında listeye girdi [K1]."
+    _print_sources(assistant.ask("Göbeklitepe hangi yıl listeye girdi?"), verbose=False)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[2].startswith("  [K1] Göbeklitepe › Koruma")
+    assert lines[3] == "       » Göbeklitepe 2018 yılında Dünya Mirası listesine girdi."

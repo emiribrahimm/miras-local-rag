@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 from .backends import Backend, Message
 from .config import Settings
+from .highlight import supporting_sentences
 from .prompts import (ABSTAIN_SENTENCE, EMPTY_QUESTION_MESSAGE, build_messages, cited_indices,
                       is_abstention, strip_invalid_citations)
 from .retrieval import _ASCII, Hit, Retriever, _fold
@@ -62,6 +63,8 @@ class Answer:
     carried: tuple[str, ...] = ()  # bu soruya önceki turdan taşınan konu
     topic: tuple[str, ...] = ()    # bu turun konusu; sonraki takip sorusuna taşınır
     cached: bool = False           # model çağrılmadı, ham cevap önbellekten geldi
+    # Atıf yapılan parça indeksi -> parçada cevabı destekleyen cümleler (vurgulamak için).
+    support: dict[int, list[str]] = field(default_factory=dict)
 
     @property
     def sources(self) -> list[Hit]:
@@ -155,7 +158,8 @@ class Assistant:
         return Answer(text, reason is not None, reason, prepared.hits, cited,
                       prepared.retrieval_seconds, generation_seconds,
                       carried=prepared.carried, topic=self._topic(prepared, cited),
-                      cached=prepared.cached)
+                      cached=prepared.cached,
+                      support=supporting_sentences(text, prepared.hits, cited) if cited else {})
 
     def _topic(self, prepared: Prepared, cited: list[int]) -> tuple[str, ...]:
         """Soruda adı geçen alanlar; hiç ad geçmiyorsa cevabın atıf yaptığı tek alan."""
