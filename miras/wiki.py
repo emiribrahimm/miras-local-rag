@@ -53,8 +53,8 @@ def fetch(title: str) -> dict:
     """API'nin `query` cevabı (sayfa ve varsa yönlendirmeler)."""
     params = {
         "action": "query", "format": "json", "formatversion": "2", "redirects": "1",
-        "prop": "extracts|revisions", "explaintext": "1", "exsectionformat": "wiki",
-        "rvprop": "ids|timestamp", "titles": title,
+        "prop": "extracts|revisions|pageprops", "explaintext": "1", "exsectionformat": "wiki",
+        "rvprop": "ids|timestamp", "ppprop": "disambiguation", "titles": title,
     }
     req = urllib.request.Request(
         f"{API}?{urllib.parse.urlencode(params)}",
@@ -94,14 +94,33 @@ def to_markdown(extract: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
+def merge_aliases(title: str, *groups: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """Takma adları sırasıyla birleştirir; başlığın kendisi ve tekrarlar (harf farkı dahil) atılır."""
+    seen = {_fold(title)}
+    merged: list[str] = []
+    for name in (n.strip() for group in groups for n in group):
+        if name and _fold(name) not in seen:
+            seen.add(_fold(name))
+            merged.append(name)
+    return tuple(merged)
+
+
 def article(query: str, aliases: tuple[str, ...] = (), filename: str | None = None) -> tuple[str, str]:
     """Maddeyi indirir; (dosya adı, üst bilgili Markdown metni) döner.
 
     Dosya adı verilmezse madde başlığından üretilir ("Nemrut Dağı" -> nemrut-dagi.md).
+    Yönlendirmeyle gelinen ad ("Truva" -> Troya) takma adlara eklenir; kullanıcı alanı o
+    adla soracaktır.
     """
-    page = fetch(parse_query(query))["pages"][0]
+    result = fetch(parse_query(query))
+    page = result["pages"][0]
     if page.get("missing") or page.get("invalid") or not page.get("extract"):
         raise WikiError(f"Vikipedi'de madde bulunamadı: {parse_query(query)}")
+    if "disambiguation" in page.get("pageprops", {}):
+        raise WikiError(f"'{page['title']}' bir anlam ayrımı sayfası; daha belirli bir madde adı "
+                        "yazın (ör. 'Selimiye Camii').")
+    aliases = merge_aliases(page["title"], aliases,
+                            [r["from"] for r in result.get("redirects", [])])
     rev = page["revisions"][0]
     url = "https://tr.wikipedia.org/wiki/" + urllib.parse.quote(page["title"].replace(" ", "_"))
     header = (

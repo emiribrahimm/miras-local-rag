@@ -54,6 +54,24 @@ def test_article_builds_header_the_parser_reads(monkeypatch):
     assert article("Sümela Manastırı", filename="sumela.md")[0] == "sumela.md"
 
 
+def test_redirect_source_becomes_an_alias(monkeypatch):
+    query = fake_query("Troya", "Troya antik bir kenttir.",
+                       redirects=[{"from": "Truva", "to": "Troya"}, {"from": "troya", "to": "Troya"}])
+    monkeypatch.setattr(wiki, "fetch", lambda title: query)
+    _, text = article("Truva", ("Troia", "truva"))
+    assert parse_document(text, "x").aliases == ("Troia", "truva")
+    _, text = article("Truva")
+    assert parse_document(text, "x").aliases == ("Truva",)
+
+
+def test_disambiguation_page_is_rejected(monkeypatch):
+    query = fake_query("Selimiye", "Selimiye şunlara işaret edebilir:")
+    query["pages"][0]["pageprops"] = {"disambiguation": ""}
+    monkeypatch.setattr(wiki, "fetch", lambda title: query)
+    with pytest.raises(WikiError, match="anlam ayrımı"):
+        article("Selimiye")
+
+
 def test_missing_article_is_an_error(monkeypatch):
     monkeypatch.setattr(wiki, "fetch", lambda title: {"pages": [{"title": title, "missing": True}]})
     with pytest.raises(WikiError, match="bulunamadı"):
