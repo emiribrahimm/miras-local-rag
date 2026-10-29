@@ -6,15 +6,16 @@ NOW = datetime(2026, 10, 26, 14, 5)
 
 
 def test_cited_answer_and_follow_up_are_exported(assistant, backend, settings):
-    backend.reply = "Göbeklitepe Şanlıurfa'dadır [K1]."
+    backend.reply = "Göbeklitepe 2018 yılında Dünya Mirası listesine girdi [K1]."
     first = assistant.ask("Göbeklitepe hangi ilde?")
     follow = assistant.ask("Peki ne zaman\nlisteye girdi?", first)
     text = conversation_markdown([("Göbeklitepe hangi ilde?", first),
                                   ("Peki ne zaman\nlisteye girdi?", follow)], settings, NOW)
     assert text.startswith("# Miras sohbeti\n\n26.10.2026 14:05 · sohbet modeli")
     assert "## Soru 2\n\n> Peki ne zaman listeye girdi?\n\n↪ Önceki sorudan devam: Göbeklitepe" in text
-    assert "Göbeklitepe Şanlıurfa'dadır [K1].\n\n**Kaynaklar:**" in text
+    assert "Göbeklitepe 2018 yılında Dünya Mirası listesine girdi [K1].\n\n**Kaynaklar:**" in text
     assert "- [K1] Göbeklitepe" in text and "(gobeklitepe.md, benzerlik" in text
+    assert ")\n  > Göbeklitepe 2018 yılında Dünya Mirası listesine girdi.\n" in text
     assert "[Vikipedi](https://example.org/g)" in text
     assert text.rstrip().endswith("lisansıyla paylaşılır.")
 

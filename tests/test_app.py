@@ -31,6 +31,14 @@ def test_answer_and_sources_are_rendered(app):
     assert "[K1] Efes" in app.expander[0].label
 
 
+def test_supporting_sentence_is_highlighted(app):
+    app.fake.reply = "Efes İzmir ilinin Selçuk ilçesindedir [K1]."
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert not app.exception
+    assert app.expander[0].markdown[0].value == (
+        ":orange-background[Efes İzmir ilinin Selçuk ilçesinde bulunan antik bir kenttir.]")
+
+
 def test_repeated_question_is_answered_from_cache(app):
     app.chat_input[0].set_value("Efes nerede?").run()
     app.chat_input[0].set_value("Efes nerede?").run()

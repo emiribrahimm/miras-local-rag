@@ -12,6 +12,7 @@ import streamlit as st
 from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
 from miras.export import conversation_markdown
+from miras.highlight import emphasize
 from miras.feedback import save_vote
 from miras.ingest import ingest, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant
@@ -116,6 +117,11 @@ def record_vote(key: str, turn: int) -> None:
         store.close()
 
 
+def mark(sentence: str) -> str:
+    # Köşeli parantez Streamlit'in renk sözdizimini bozar; o durumda kalın yazı yeterli.
+    return f"**{sentence}**" if "[" in sentence or "]" in sentence else f":orange-background[{sentence}]"
+
+
 def render_sources(answer: Answer, show_all: bool) -> None:
     if answer.refusal_reason == "empty":
         return
@@ -133,7 +139,8 @@ def render_sources(answer: Answer, show_all: bool) -> None:
         hit = answer.hits[i]
         cited = "" if answer.refused else (" · atıf yapıldı" if i in answer.cited else " · kullanılmadı")
         with st.expander(f"[K{i + 1}] {hit.chunk.section} — benzerlik {hit.score:.2f}{cited}"):
-            st.write(hit.chunk.text)
+            # Cevabı destekleyen cümle vurgulanır; kullanıcı parçanın tamamını okumak zorunda kalmasın.
+            st.write(emphasize(hit.chunk.text, answer.support.get(i, []), mark))
             if hit.chunk.source_url:
                 st.caption(f"Kaynak: [{hit.chunk.title} — Vikipedi]({hit.chunk.source_url}) "
                            f"({hit.chunk.filename}, CC BY-SA 4.0)")

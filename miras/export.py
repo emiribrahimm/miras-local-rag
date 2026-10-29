@@ -28,6 +28,8 @@ def _sources(answer: Answer) -> tuple[list[str], bool]:
             line += f" · [Vikipedi]({chunk.source_url})"
             linked = True
         lines.append(line)
+        # Parçada cevabı destekleyen cümle, kaynak satırının altında alıntı olarak.
+        lines += [f"  > {sentence}" for sentence in answer.support.get(i, [])]
     return lines, linked
 
 
