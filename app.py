@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from collections import Counter
 from datetime import datetime
 
@@ -11,6 +12,7 @@ import streamlit as st
 from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
 from miras.export import conversation_markdown
+from miras.feedback import save_vote
 from miras.ingest import ingest, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
@@ -91,6 +93,16 @@ def render_delete_result() -> None:
         st.success(f"Silindi: {filename}")
 
 
+def record_vote(key: str, turn: int) -> None:
+    """Oy değişince çağrılır; oy veritabanına yazılır (geri alınırsa silinir)."""
+    question, answer = st.session_state.history[turn]
+    store = Store(SETTINGS.db_path)
+    try:
+        save_vote(store, key, st.session_state[key], question, answer, SETTINGS.chat_model)
+    finally:
+        store.close()
+
+
 def render_sources(answer: Answer, show_all: bool) -> None:
     if answer.refusal_reason == "empty":
         return
@@ -160,6 +172,7 @@ with st.sidebar:
     clicked = next((q for q in EXAMPLES if st.button(q, use_container_width=True)), None)
     if st.button("Sohbeti temizle"):
         st.session_state.history = []
+        st.session_state.pop("session_id", None)  # yeni sohbetin oyları eskilerle karışmasın
     turns = st.session_state.get("history", [])
     now = datetime.now()
     st.download_button("Sohbeti indir (.md)", conversation_markdown(turns, SETTINGS, now) if turns else "",
@@ -167,11 +180,15 @@ with st.sidebar:
                        disabled=not turns, help="Sorular, cevaplar ve kaynaklarıyla birlikte")
 
 history: list[tuple[str, Answer]] = st.session_state.setdefault("history", [])
-for question, past in history:
+session_id = st.session_state.setdefault("session_id", uuid.uuid4().hex)
+for turn, (question, past) in enumerate(history):
     st.chat_message("user").write(question)
     with st.chat_message("assistant"):
         st.write(past.text)
         render_sources(past, show_all)
+        if past.refusal_reason != "empty":
+            key = f"vote-{session_id}-{turn}"
+            st.feedback("thumbs", key=key, on_change=record_vote, args=(key, turn))
 
 question = st.chat_input("Bir soru sorun...") or clicked
 if question:

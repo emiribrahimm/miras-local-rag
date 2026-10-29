@@ -99,3 +99,29 @@ def test_last_doc_cannot_be_deleted(app, settings):
     assert not app.exception
     assert "En az bir doküman kalmalı." in app.sidebar.error[0].value
     assert (settings.docs_dir / "gobeklitepe.md").exists()
+
+
+def test_votes_are_saved_changed_and_reset_with_chat(app, settings):
+    from miras.store import Store
+
+    app.chat_input[0].set_value("Efes nerede?").run()
+    app.chat_input[0].set_value("Pizza hamuru tarifi nedir?").run()
+    assert len(app.feedback) == 2
+    app.feedback[0].set_value(1).run()
+    app.feedback[1].set_value(0).run()
+    assert not app.exception
+    store = Store(settings.db_path)
+    rows = {r["question"]: r for r in store.feedback_rows()}
+    assert rows["Efes nerede?"]["rating"] == 1
+    assert rows["Efes nerede?"]["sources"][0]["cited"] is True
+    assert rows["Pizza hamuru tarifi nedir?"]["rating"] == -1
+    assert rows["Pizza hamuru tarifi nedir?"]["refusal_reason"] == "low_similarity"
+
+    app.feedback[0].set_value(0).run()
+    app.feedback[1].set_value(None).run()
+    assert [(r["question"], r["rating"]) for r in store.feedback_rows()] == [("Efes nerede?", -1)]
+
+    next(b for b in app.sidebar.button if b.label == "Sohbeti temizle").click().run()
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert app.feedback[0].value is None
+    assert len(store.feedback_rows()) == 1
