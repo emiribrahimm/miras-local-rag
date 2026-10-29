@@ -17,6 +17,7 @@ from miras.ingest import ingest, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
 from miras.store import Store
+from miras.wiki import WikiError, article
 
 EXAMPLES = [
     "Göbeklitepe hangi yıl Dünya Mirası listesine girdi?",
@@ -55,6 +56,18 @@ def index_uploads(assistant: Assistant, uploads: list[tuple[str, bytes]]) -> Non
             store.close()
     st.session_state.upload_result = (saved, added, errors)
     st.rerun()
+
+
+def add_from_wikipedia(assistant: Assistant, query: str, aliases: str) -> None:
+    """Maddeyi indirir, doküman klasörüne yazar ve yüklenen dosyalar gibi indeksler."""
+    try:
+        with st.spinner("Vikipedi'den indiriliyor..."):
+            filename, text = article(query, tuple(a.strip() for a in aliases.split(",") if a.strip()),
+                                     docs_dir=SETTINGS.docs_dir)
+    except WikiError as err:
+        st.session_state.upload_result = ([], [], [str(err)])
+        st.rerun()
+    index_uploads(assistant, [(filename, text.encode("utf-8"))])
 
 
 def render_upload_result() -> None:
@@ -160,6 +173,12 @@ with st.sidebar:
                                         "üst bilgi eklenebilir; yoksa dosya adı başlık olur.")
         if st.form_submit_button("İndeksle") and uploads:
             index_uploads(assistant, [(f.name, f.getvalue()) for f in uploads])
+    with st.form("wiki", clear_on_submit=True):
+        query = st.text_input("Vikipedi'den ekle", placeholder="Madde adı ya da tr.wikipedia.org bağlantısı",
+                              help="Yalnızca bu düğmeye basınca internete çıkılır.")
+        aliases = st.text_input("Takma adlar (isteğe bağlı)", placeholder="virgülle ayırın")
+        if st.form_submit_button("İndir ve indeksle") and query.strip():
+            add_from_wikipedia(assistant, query, aliases)
     render_upload_result()
     with st.expander("Doküman sil"):
         with st.form("delete"):

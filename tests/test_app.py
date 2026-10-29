@@ -125,3 +125,30 @@ def test_votes_are_saved_changed_and_reset_with_chat(app, settings):
     app.chat_input[0].set_value("Efes nerede?").run()
     assert app.feedback[0].value is None
     assert len(store.feedback_rows()) == 1
+
+
+def test_wikipedia_article_is_added_and_searchable(app, settings, monkeypatch):
+    import miras.wiki
+
+    page = {"title": "Ani", "extract": "Ani ören yeri Kars ilinde bulunan bir Orta Çağ kentidir.",
+            "revisions": [{"revid": 1, "timestamp": "2026-10-01T00:00:00Z"}]}
+    monkeypatch.setattr(miras.wiki, "fetch", lambda title: {"pages": [page]})
+    app.sidebar.text_input[0].set_value("https://tr.wikipedia.org/wiki/Ani")
+    app.sidebar.text_input[1].set_value("Ani Harabeleri, Ani Ören Yeri")
+    next(b for b in app.sidebar.button if b.label == "İndir ve indeksle").click().run()
+    assert not app.exception
+    text = (settings.docs_dir / "ani.md").read_text(encoding="utf-8")
+    assert "aliases: Ani Harabeleri, Ani Ören Yeri" in text and "source: https://tr.wikipedia.org/wiki/Ani" in text
+    assert "İndekslendi: ani.md" in app.sidebar.success[0].value
+    assert "- Ani (1 parça)" in app.sidebar.markdown[1].value
+
+    app.chat_input[0].set_value("Ani hangi ilde?").run()
+    assert "[K1] Ani" in app.expander[0].label
+
+
+def test_bad_wikipedia_link_shows_error(app, settings):
+    app.sidebar.text_input[0].set_value("https://en.wikipedia.org/wiki/Ani")
+    next(b for b in app.sidebar.button if b.label == "İndir ve indeksle").click().run()
+    assert not app.exception
+    assert "tr.wikipedia.org" in app.sidebar.error[0].value
+    assert not (settings.docs_dir / "ani.md").exists()

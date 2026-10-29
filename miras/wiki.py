@@ -12,7 +12,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
+from .chunking import parse_document
 from .retrieval import _ASCII, _fold
 
 API = "https://tr.wikipedia.org/w/api.php"
@@ -105,12 +107,13 @@ def merge_aliases(title: str, *groups: tuple[str, ...] | list[str]) -> tuple[str
     return tuple(merged)
 
 
-def article(query: str, aliases: tuple[str, ...] = (), filename: str | None = None) -> tuple[str, str]:
+def article(query: str, aliases: tuple[str, ...] = (), filename: str | None = None,
+            docs_dir: Path | None = None) -> tuple[str, str]:
     """Maddeyi indirir; (dosya adı, üst bilgili Markdown metni) döner.
 
     Dosya adı verilmezse madde başlığından üretilir ("Nemrut Dağı" -> nemrut-dagi.md).
     Yönlendirmeyle gelinen ad ("Truva" -> Troya) takma adlara eklenir; kullanıcı alanı o
-    adla soracaktır.
+    adla soracaktır. `docs_dir` verilirse ve madde zaten ekliyse dosyadaki takma adlar korunur.
     """
     result = fetch(parse_query(query))
     page = result["pages"][0]
@@ -119,7 +122,11 @@ def article(query: str, aliases: tuple[str, ...] = (), filename: str | None = No
     if "disambiguation" in page.get("pageprops", {}):
         raise WikiError(f"'{page['title']}' bir anlam ayrımı sayfası; daha belirli bir madde adı "
                         "yazın (ör. 'Selimiye Camii').")
-    aliases = merge_aliases(page["title"], aliases,
+    filename = filename or f"{slug(page['title'])}.md"
+    existing = docs_dir / filename if docs_dir else None
+    kept = (parse_document(existing.read_text(encoding="utf-8"), existing.stem).aliases
+            if existing and existing.exists() else ())
+    aliases = merge_aliases(page["title"], kept, aliases,
                             [r["from"] for r in result.get("redirects", [])])
     rev = page["revisions"][0]
     url = "https://tr.wikipedia.org/wiki/" + urllib.parse.quote(page["title"].replace(" ", "_"))
@@ -133,4 +140,4 @@ def article(query: str, aliases: tuple[str, ...] = (), filename: str | None = No
         "---\n\n"
     )
     body = to_markdown(page["extract"])
-    return filename or f"{slug(page['title'])}.md", f"{header}# {page['title']}\n\n{body}\n"
+    return filename, f"{header}# {page['title']}\n\n{body}\n"

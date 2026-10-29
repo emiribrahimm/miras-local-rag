@@ -64,6 +64,15 @@ def test_redirect_source_becomes_an_alias(monkeypatch):
     assert parse_document(text, "x").aliases == ("Truva",)
 
 
+def test_updating_an_existing_doc_keeps_its_aliases(monkeypatch, tmp_path):
+    (tmp_path / "troya.md").write_text("---\ntitle: Troya\naliases: Truva, İlion\n---\n\nEski.\n",
+                                       encoding="utf-8")
+    monkeypatch.setattr(wiki, "fetch", lambda title: fake_query("Troya", "Troya antik bir kenttir."))
+    filename, text = article("Troya", ("Troia",), docs_dir=tmp_path)
+    assert filename == "troya.md"
+    assert parse_document(text, "x").aliases == ("Truva", "İlion", "Troia")
+
+
 def test_disambiguation_page_is_rejected(monkeypatch):
     query = fake_query("Selimiye", "Selimiye şunlara işaret edebilir:")
     query["pages"][0]["pageprops"] = {"disambiguation": ""}
