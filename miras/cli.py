@@ -1,15 +1,19 @@
-"""Komut satırı arayüzü: ingest, ask, chat, eval, calibrate."""
+"""Komut satırı arayüzü: ingest, ask, chat, eval, calibrate, feedback."""
 
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
 import sys
 import time
+from datetime import datetime
+from pathlib import Path
 
 from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ROOT, SETTINGS, Settings
+from .feedback import eval_candidates
 from .ingest import ingest
 from .pipeline import Answer, Assistant
 from .retrieval import IndexError_, Retriever
@@ -194,6 +198,30 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
         print(f"Takip soruları: {followups['overall']['passed']}/{followups['overall']['total']}")
 
 
+def cmd_feedback(args: argparse.Namespace, settings: Settings) -> None:
+    rows = Store(settings.db_path).feedback_rows()
+    up = sum(r["rating"] > 0 for r in rows)
+    print(f"👍 {up}  👎 {len(rows) - up}")
+    for row in rows if args.all else [r for r in rows if r["rating"] < 0]:
+        when = datetime.fromtimestamp(row["created"])
+        carried = f" (konu: {', '.join(row['carried'])})" if row["carried"] else ""
+        print(f"\n{'👍' if row['rating'] > 0 else '👎'} {when:%d.%m.%Y %H:%M} {row['question']}{carried}")
+        print(f"     -> {row['answer'][:160]}")
+        if row["refusal_reason"]:
+            print(f"     reddetme: {row['refusal_reason']}")
+        else:
+            cited = sorted({s["filename"] for s in row["sources"] if s["cited"]})
+            print(f"     atıf: {', '.join(cited) or 'yok'}  ({row['chat_model']})")
+    if args.export:
+        candidates = eval_candidates(rows)
+        args.export.parent.mkdir(parents=True, exist_ok=True)
+        args.export.write_text(json.dumps(candidates, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8")
+        print(f"\n{len(candidates)} aday -> {args.export}")
+        print("type ve expected alanlarını doldurup data/eval/questions.json'a ekleyin; "
+              "carried alanı olanlar takip sorusu (followups.json).")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="main.py", description="Miras: Foundry Local ile çalışan yerel RAG asistanı")
@@ -222,6 +250,12 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("eval", help="Test setini çalıştır, reports/ altına rapor yaz")
     p.set_defaults(func=cmd_eval)
+
+    p = sub.add_parser("feedback", help="Web arayüzünde verilen oyları listele (model çağırmaz)")
+    p.add_argument("--all", action="store_true", help="Beğenilen cevapları da göster")
+    p.add_argument("--export", type=Path, metavar="DOSYA",
+                   help="Beğenilmeyen soruları eval adayı olarak JSON'a yaz")
+    p.set_defaults(func=cmd_feedback)
 
     args = parser.parse_args(argv)
     overrides = {"chat_model": args.model, "chat_device": args.device}
