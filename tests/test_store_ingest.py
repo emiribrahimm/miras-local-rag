@@ -207,6 +207,22 @@ def test_answer_cache_keeps_only_newest_entries(store, monkeypatch):
     assert [store.cached_answer(k) for k in ("a", "b", "c")] == [None, "b", "c"]
 
 
+def test_feedback_is_saved_updated_and_survives_rebuild(store, backend, settings):
+    sources = [{"filename": "efes.md", "section": "Efes", "score": 0.81, "cited": True}]
+    store.save_feedback("s1-0", 1, "Efes nerede?", (), "Efes İzmir'dedir [K1].", None, sources, "m")
+    store.save_feedback("s1-1", -1, "Peki ne zaman?", ("Efes",), "Bu bilgi elimdeki dokümanlarda "
+                        "yer almıyor.", "model", sources, "m")
+    store.save_feedback("s1-0", -1, "Efes nerede?", (), "Efes İzmir'dedir [K1].", None, sources, "m")
+    rows = store.feedback_rows()
+    assert [r["key"] for r in rows] == ["s1-0", "s1-1"]
+    assert rows[0]["rating"] == -1 and rows[0]["sources"] == sources
+    assert rows[1]["carried"] == ("Efes",) and rows[1]["refusal_reason"] == "model"
+    assert store.feedback_rows(rating=1) == []
+    ingest(store, backend, settings, rebuild=True)
+    store.delete_feedback("s1-1")
+    assert [r["key"] for r in store.feedback_rows(rating=-1)] == ["s1-0"]
+
+
 def test_remove_document_deletes_file_and_chunks(store, backend, settings):
     from miras.ingest import remove_document
     remove_document(store, settings.docs_dir, "efes.md")

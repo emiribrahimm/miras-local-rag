@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -31,6 +32,17 @@ CREATE TABLE IF NOT EXISTS answer_cache (
     key     TEXT PRIMARY KEY,          -- model, ayarlar ve prompt mesajlarının özeti
     answer  TEXT NOT NULL,             -- doğrulanmamış ham model çıktısı
     created REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS feedback (
+    key            TEXT PRIMARY KEY,   -- oturum + tur; oy değişirse aynı satır güncellenir
+    created        REAL NOT NULL,
+    rating         INTEGER NOT NULL,   -- 1 = beğendi, -1 = beğenmedi
+    question       TEXT NOT NULL,      -- kullanıcının yazdığı soru
+    carried        TEXT NOT NULL,      -- önceki turdan taşınan konu, virgülle ayrılmış
+    answer         TEXT NOT NULL,
+    refusal_reason TEXT,
+    sources        TEXT NOT NULL,      -- json: getirilen parçalar (dosya, bölüm, benzerlik, atıf)
+    chat_model     TEXT NOT NULL
 );
 """
 
@@ -112,6 +124,38 @@ class Store:
                               (key, answer, time.time()))
             self.conn.execute("DELETE FROM answer_cache WHERE key NOT IN (SELECT key FROM answer_cache "
                               "ORDER BY created DESC, rowid DESC LIMIT ?)", (MAX_CACHED_ANSWERS,))
+
+    # --- geri bildirim -------------------------------------------------------
+    # İndeksten bağımsız kullanıcı verisi: `clear()` (ingest --rebuild) bunlara dokunmaz.
+    def save_feedback(self, key: str, rating: int, question: str, carried: tuple[str, ...],
+                      answer: str, refusal_reason: str | None, sources: list[dict],
+                      chat_model: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO feedback(key, created, rating, question, carried, answer, "
+                "refusal_reason, sources, chat_model) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (key, time.time(), rating, question, ", ".join(carried), answer, refusal_reason,
+                 json.dumps(sources, ensure_ascii=False), chat_model))
+
+    def delete_feedback(self, key: str) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM feedback WHERE key = ?", (key,))
+
+    def feedback_rows(self, rating: int | None = None) -> list[dict]:
+        """Oylar, yeniden eskiye; `rating` verilirse yalnızca o oy."""
+        query = ("SELECT key, created, rating, question, carried, answer, refusal_reason, sources, "
+                 "chat_model FROM feedback")
+        params: tuple = ()
+        if rating is not None:
+            query += " WHERE rating = ?"
+            params = (rating,)
+        cursor = self.conn.execute(query + " ORDER BY created DESC, rowid DESC", params)
+        names = [d[0] for d in cursor.description]
+        rows = [dict(zip(names, row)) for row in cursor]
+        for row in rows:
+            row["carried"] = tuple(t.strip() for t in row["carried"].split(",") if t.strip())
+            row["sources"] = json.loads(row["sources"])
+        return rows
 
     # --- okuma ------------------------------------------------------------
     def counts(self) -> tuple[int, int]:
