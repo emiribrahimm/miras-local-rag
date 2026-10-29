@@ -88,6 +88,7 @@ uv run python main.py chat                  # interactive, type "çık" to quit
 uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # also prints chunks and timings
 uv run python main.py ingest --rebuild
+uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # needs internet
 uv run python main.py calibrate             # re-measure the similarity threshold
 uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
@@ -113,7 +114,16 @@ embedding model you'll need `ingest --rebuild`.
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
 upload them from the web UI sidebar ("Doküman ekle"), which saves them there and indexes them
 right away. Only changed files get re-embedded. "Doküman sil" in the same sidebar removes a file
-from `data/docs/` and the index (nothing to re-embed), as long as at least one document is left. You'll probably want to rerun `calibrate` and update the topic
+from `data/docs/` and the index (nothing to re-embed), as long as at least one document is left.
+
+Turkish Wikipedia articles can be added by name or link, with "Vikipedi'den ekle" in the sidebar
+or `add-wiki`. The article is downloaded, converted the same way as the ones in `data/docs/`
+(reference sections dropped, header with source and revision) and indexed. This is the only
+thing that goes online, and only when you press the button or run the command. If the name was a
+redirect ("Truva" -> Troya) it's added as an alias, disambiguation pages are refused, and adding
+an article that's already there updates it and keeps its aliases.
+
+After adding or removing documents you'll probably want to rerun `calibrate` and update the topic
 description in `miras/prompts.py` too. An optional header at the top of a file sets the title and
 aliases:
 
@@ -243,6 +253,7 @@ uv run python main.py chat                  # sohbet, çıkmak için "çık"
 uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de gösterir
 uv run python main.py ingest --rebuild
+uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # internet gerekir
 uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
 uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
@@ -268,7 +279,16 @@ Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/d
 `ingest` çalıştırmanız ya da web arayüzünün kenar çubuğundan ("Doküman ekle") yüklemeniz yeterli.
 Yüklenen dosyalar aynı klasöre kaydedilip hemen indeksleniyor, sadece değişen dosyalar yeniden
 işleniyor. Aynı yerdeki "Doküman sil" bir dosyayı `data/docs/`'tan ve indeksten kaldırıyor (yeniden
-gömme gerekmiyor); en az bir doküman kalması gerekiyor. Sonrasında `calibrate`
+gömme gerekmiyor); en az bir doküman kalması gerekiyor.
+
+Türkçe Vikipedi maddeleri adıyla ya da bağlantısıyla da eklenebiliyor: kenar çubuğunda
+"Vikipedi'den ekle" ya da `add-wiki`. Madde indirilip `data/docs/` içindekilerle aynı şekilde
+dönüştürülüyor (kaynakça gibi bölümler atılıyor, kaynak ve revizyonlu üst bilgi ekleniyor) ve
+indeksleniyor. İnternete çıkan tek şey bu, o da sadece düğmeye basınca ya da komut çalışınca.
+Yazılan ad bir yönlendirmeyse ("Truva" -> Troya) takma ad olarak ekleniyor, anlam ayrımı sayfaları
+reddediliyor; zaten ekli bir madde tekrar eklenirse güncelleniyor ve takma adları korunuyor.
+
+Doküman ekleyip sildikten sonra `calibrate`
 ile eşiği tekrar ölçmek ve `miras/prompts.py` içindeki konu tanımını güncellemek iyi olur. Dosyanın
 başına başlık ve takma adlar için şöyle bir üst bilgi eklenebilir:
 
