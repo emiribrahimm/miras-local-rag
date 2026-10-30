@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 from .chunking import parse_document
@@ -51,13 +52,9 @@ def slug(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", _fold(title).translate(_ASCII)).strip("-") or "madde"
 
 
-def fetch(title: str) -> dict:
-    """API'nin `query` cevabı (sayfa ve varsa yönlendirmeler)."""
-    params = {
-        "action": "query", "format": "json", "formatversion": "2", "redirects": "1",
-        "prop": "extracts|revisions|pageprops", "explaintext": "1", "exsectionformat": "wiki",
-        "rvprop": "ids|timestamp", "ppprop": "disambiguation", "titles": title,
-    }
+def _get(params: dict) -> dict:
+    """API isteği; `query` cevabını döner. 429'da bekleyip yeniden dener."""
+    params = {"action": "query", "format": "json", "formatversion": "2", **params}
     req = urllib.request.Request(
         f"{API}?{urllib.parse.urlencode(params)}",
         headers={"User-Agent": "miras-rag/0.1 (egitim projesi)"},
@@ -74,6 +71,15 @@ def fetch(title: str) -> dict:
         except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as err:
             raise WikiError(f"Vikipedi'ye ulaşılamadı: {err}") from err
     raise AssertionError("unreachable")
+
+
+def fetch(title: str) -> dict:
+    """API'nin `query` cevabı (sayfa ve varsa yönlendirmeler)."""
+    return _get({
+        "redirects": "1", "prop": "extracts|revisions|pageprops", "explaintext": "1",
+        "exsectionformat": "wiki", "rvprop": "ids|timestamp", "ppprop": "disambiguation",
+        "titles": title,
+    })
 
 
 def to_markdown(extract: str) -> str:
@@ -141,3 +147,66 @@ def article(query: str, aliases: tuple[str, ...] = (), filename: str | None = No
     )
     body = to_markdown(page["extract"])
     return filename, f"{header}# {page['title']}\n\n{body}\n"
+
+
+@dataclass(frozen=True)
+class WikiDoc:
+    filename: str
+    title: str      # kaynak bağlantısındaki madde başlığı
+    revision: int   # dosyadaki revizyon numarası (yoksa 0)
+    source: str
+
+
+@dataclass(frozen=True)
+class WikiUpdate:
+    doc: WikiDoc
+    latest: int | None  # Vikipedi'deki son revizyon; None = madde artık yok
+
+
+def local_revisions(docs_dir: Path) -> list[WikiDoc]:
+    """Kaynağı tr.wikipedia.org olan dokümanlar ve üst bilgilerindeki revizyon numaraları."""
+    docs: list[WikiDoc] = []
+    for path in sorted(docs_dir.glob("*.md")):
+        match = re.match(r"---\n(.*?)\n---\n", path.read_text(encoding="utf-8"), flags=re.DOTALL)
+        if not match:
+            continue
+        meta = {k.strip(): v.strip() for k, _, v in
+                (line.partition(":") for line in match.group(1).splitlines())}
+        source = meta.get("source", "")
+        try:
+            title = parse_query(source) if re.match(r"https?://", source) else None
+        except WikiError:
+            title = None  # başka bir sitenin bağlantısı
+        if title:
+            revision = re.match(r"\d+", meta.get("revision", ""))
+            docs.append(WikiDoc(path.name, title, int(revision.group()) if revision else 0, source))
+    return docs
+
+
+def latest_revisions(titles: list[str]) -> dict[str, int]:
+    """Madde başlığı -> Vikipedi'deki son revizyon numarası; 50'şerlik toplu isteklerle.
+
+    API'nin düzelttiği ya da yönlendirdiği başlıklar istenen başlığa geri eşlenir; bulunamayan
+    maddeler sonuçta yer almaz.
+    """
+    latest: dict[str, int] = {}
+    for start in range(0, len(titles), 50):
+        batch = titles[start:start + 50]
+        result = _get({"redirects": "1", "prop": "revisions", "rvprop": "ids|timestamp",
+                       "titles": "|".join(batch)})
+        # İstenen başlık -> API'nin döndürdüğü sayfa başlığı (normalleştirme, sonra yönlendirme).
+        resolved = {t: t for t in batch}
+        for step in ("normalized", "redirects"):
+            renames = {r["from"]: r["to"] for r in result.get(step, [])}
+            resolved = {t: renames.get(r, r) for t, r in resolved.items()}
+        revisions = {p["title"]: p["revisions"][0]["revid"] for p in result.get("pages", [])
+                     if not p.get("missing") and p.get("revisions")}
+        latest.update({t: revisions[r] for t, r in resolved.items() if r in revisions})
+    return latest
+
+
+def outdated(docs_dir: Path) -> list[WikiUpdate]:
+    """Vikipedi'de dosyadakinden yeni revizyonu olan ya da artık bulunamayan maddeler."""
+    docs = local_revisions(docs_dir)
+    latest = latest_revisions(sorted({d.title for d in docs})) if docs else {}
+    return [WikiUpdate(d, latest.get(d.title)) for d in docs if latest.get(d.title) != d.revision]

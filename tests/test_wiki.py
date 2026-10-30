@@ -6,7 +6,8 @@ import pytest
 
 from miras import wiki
 from miras.chunking import parse_document
-from miras.wiki import WikiError, article, parse_query, slug, to_markdown
+from miras.wiki import (WikiError, article, latest_revisions, local_revisions, outdated,
+                        parse_query, slug, to_markdown)
 
 EXTRACT = ("Sümela Manastırı, Trabzon'un Maçka ilçesinde bir manastırdır.\n\n"
            "== Tarihçe ==\nManastır 4. yüzyılda kurulmuştur.\n\n"
@@ -100,6 +101,51 @@ def test_fetch_returns_query(monkeypatch):
     body = json.dumps({"query": fake_query()}).encode()
     monkeypatch.setattr(wiki.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(body))
     assert wiki.fetch("Sümela Manastırı")["pages"][0]["title"] == "Sümela Manastırı"
+
+
+def wiki_doc(title, revision, aliases=""):
+    url = "https://tr.wikipedia.org/wiki/" + title.replace(" ", "_")
+    return (f"---\ntitle: {title}\n" + (f"aliases: {aliases}\n" if aliases else "")
+            + f"source: {url}\nrevision: {revision} (2026-08-08T16:08:20Z)\n---\n\n# {title}\n\nEski metin.\n")
+
+
+def test_local_revisions_reads_wikipedia_headers_only(tmp_path):
+    (tmp_path / "nemrut-dagi.md").write_text(wiki_doc("Nemrut Dağı", 111), encoding="utf-8")
+    (tmp_path / "eski.md").write_text("---\ntitle: Eski\nsource: https://tr.wikipedia.org/wiki/Eski\n---\n\nx\n",
+                                      encoding="utf-8")
+    (tmp_path / "kendi.md").write_text("---\ntitle: Kendi\nsource: https://example.org/k\n---\n\nx\n",
+                                       encoding="utf-8")
+    (tmp_path / "notlar.md").write_text("# Notlar\n\nÜst bilgi yok.\n", encoding="utf-8")
+    docs = local_revisions(tmp_path)
+    assert [(d.filename, d.title, d.revision) for d in docs] == [
+        ("eski.md", "Eski", 0), ("nemrut-dagi.md", "Nemrut Dağı", 111)]
+
+
+def test_latest_revisions_maps_back_normalized_and_redirected_titles(monkeypatch):
+    calls = []
+
+    def fake_get(params):
+        calls.append(params["titles"])
+        return {"normalized": [{"from": "efes", "to": "Efes"}],
+                "redirects": [{"from": "Truva", "to": "Troya"}],
+                "pages": [{"title": "Efes", "revisions": [{"revid": 5}]},
+                          {"title": "Troya", "revisions": [{"revid": 7}]},
+                          {"title": "Yok", "missing": True}]}
+
+    monkeypatch.setattr(wiki, "_get", fake_get)
+    assert latest_revisions(["efes", "Truva", "Yok"]) == {"efes": 5, "Truva": 7}
+    assert calls == ["efes|Truva|Yok"]
+    calls.clear()
+    latest_revisions([f"M{i}" for i in range(120)])
+    assert [len(c.split("|")) for c in calls] == [50, 50, 20]
+
+
+def test_outdated_lists_changed_and_missing_articles(monkeypatch, tmp_path):
+    for name, title, rev in [("efes.md", "Efes", 10), ("ani.md", "Ani", 20), ("troya.md", "Troya", 30)]:
+        (tmp_path / name).write_text(wiki_doc(title, rev), encoding="utf-8")
+    monkeypatch.setattr(wiki, "latest_revisions", lambda titles: {"Efes": 10, "Ani": 25})
+    updates = {u.doc.filename: u.latest for u in outdated(tmp_path)}
+    assert updates == {"ani.md": 25, "troya.md": None}
 
 
 def test_add_wiki_command_writes_and_indexes(store, backend, settings, monkeypatch, capsys):
