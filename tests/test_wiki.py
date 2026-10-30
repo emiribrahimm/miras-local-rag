@@ -165,3 +165,32 @@ def test_add_wiki_command_writes_and_indexes(store, backend, settings, monkeypat
 
     assert cli.main(["add-wiki", "https://en.wikipedia.org/wiki/Ani"]) == 1
     assert "tr.wikipedia.org" in capsys.readouterr().err
+
+
+def test_update_wiki_command_refreshes_changed_articles(store, backend, settings, monkeypatch, capsys):
+    import dataclasses
+
+    from miras import cli
+
+    monkeypatch.setattr(cli, "SETTINGS", dataclasses.replace(
+        cli.SETTINGS, docs_dir=settings.docs_dir, db_path=settings.db_path))
+    monkeypatch.setattr(cli, "_backend", lambda s: backend)
+    (settings.docs_dir / "troya.md").write_text(wiki_doc("Troya", 30, "Truva, İlion"), encoding="utf-8")
+    (settings.docs_dir / "ani.md").write_text(wiki_doc("Ani", 20), encoding="utf-8")
+    monkeypatch.setattr(wiki, "latest_revisions", lambda titles: {"Troya": 31})
+    monkeypatch.setattr(wiki, "fetch", lambda title: fake_query("Troya", "Troya yeni metin."))
+
+    assert cli.main(["update-wiki", "--check"]) == 0
+    out = capsys.readouterr().out
+    assert "troya.md" in out and "30 -> 31" in out and "bulunamadı" in out
+    assert "Eski metin" in (settings.docs_dir / "troya.md").read_text(encoding="utf-8")
+
+    assert cli.main(["update-wiki"]) == 0
+    assert "Eklenen/güncellenen: 2" in capsys.readouterr().out  # ikisi de ilk kez indeksleniyor
+    text = (settings.docs_dir / "troya.md").read_text(encoding="utf-8")
+    assert "Troya yeni metin." in text and "aliases: Truva, İlion" in text
+    assert "Eski metin" in (settings.docs_dir / "ani.md").read_text(encoding="utf-8")
+
+    monkeypatch.setattr(wiki, "local_revisions", lambda docs_dir: [])
+    assert cli.main(["update-wiki"]) == 0
+    assert "Tüm maddeler güncel." in capsys.readouterr().out

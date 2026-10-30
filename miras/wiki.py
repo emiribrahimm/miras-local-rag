@@ -210,3 +210,12 @@ def outdated(docs_dir: Path) -> list[WikiUpdate]:
     docs = local_revisions(docs_dir)
     latest = latest_revisions(sorted({d.title for d in docs})) if docs else {}
     return [WikiUpdate(d, latest.get(d.title)) for d in docs if latest.get(d.title) != d.revision]
+
+
+def refreshed(updates: list[WikiUpdate], docs_dir: Path) -> list[tuple[str, str]]:
+    """Değişen maddelerin yeni metinleri (dosya adı, metin); dosya adı ve takma adlar korunur.
+
+    Artık bulunamayan maddeler atlanır, dosyalarına dokunulmaz.
+    """
+    return [article(u.doc.source, filename=u.doc.filename, docs_dir=docs_dir)
+            for u in updates if u.latest is not None]

@@ -1,4 +1,4 @@
-"""Komut satırı arayüzü: ingest, add-wiki, ask, chat, eval, calibrate, feedback."""
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .ingest import ingest, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import IndexError_, Retriever
 from .store import Store
-from .wiki import WikiError, article
+from .wiki import WikiError, article, outdated, refreshed
 
 
 def _status(message: str) -> None:
@@ -88,6 +88,25 @@ def cmd_add_wiki(args: argparse.Namespace, settings: Settings) -> None:
     if errors:
         raise WikiError(errors[0])
     print(f"{filename} -> {settings.docs_dir}")
+    cmd_ingest(argparse.Namespace(rebuild=False), settings)
+
+
+def cmd_update_wiki(args: argparse.Namespace, settings: Settings) -> None:
+    _status("Vikipedi'deki revizyonlar denetleniyor...")
+    updates = outdated(settings.docs_dir)
+    if not updates:
+        print("Tüm maddeler güncel.")
+        return
+    for u in updates:
+        latest = "Vikipedi'de bulunamadı, dokunulmadı" if u.latest is None else u.latest
+        print(f"  {u.doc.filename:<24} {u.doc.revision} -> {latest}")
+    if args.check or all(u.latest is None for u in updates):
+        return
+    _status("Değişen maddeler indiriliyor...")
+    _, errors = save_uploads(settings.docs_dir, [(name, text.encode("utf-8"))
+                                                 for name, text in refreshed(updates, settings.docs_dir)])
+    if errors:
+        raise WikiError(errors[0])
     cmd_ingest(argparse.Namespace(rebuild=False), settings)
 
 
@@ -251,6 +270,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("article", help="Madde adı ya da tr.wikipedia.org bağlantısı")
     p.add_argument("--aliases", help="Alanın başka adları, virgülle ayrılmış")
     p.set_defaults(func=cmd_add_wiki)
+
+    p = sub.add_parser("update-wiki", help="Vikipedi'de değişen maddeleri indir ve indeksle (internet gerekir)")
+    p.add_argument("--check", action="store_true", help="Yalnızca listele, indirme")
+    p.set_defaults(func=cmd_update_wiki)
 
     p = sub.add_parser("ask", help="Tek bir soru sor")
     p.add_argument("question")
