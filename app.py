@@ -18,7 +18,7 @@ from miras.ingest import ingest, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
 from miras.store import Store
-from miras.wiki import WikiError, article
+from miras.wiki import WikiError, WikiUpdate, article, outdated, refreshed
 
 EXAMPLES = [
     "Göbeklitepe hangi yıl Dünya Mirası listesine girdi?",
@@ -69,6 +69,47 @@ def add_from_wikipedia(assistant: Assistant, query: str, aliases: str) -> None:
         st.session_state.upload_result = ([], [], [str(err)])
         st.rerun()
     index_uploads(assistant, [(filename, text.encode("utf-8"))])
+
+
+def check_wiki_updates() -> None:
+    """Vikipedi kaynaklı dokümanların revizyonlarını denetler; sonuç kenar çubuğunda listelenir."""
+    try:
+        with st.spinner("Vikipedi'deki revizyonlar denetleniyor..."):
+            st.session_state.wiki_updates = outdated(SETTINGS.docs_dir)
+    except WikiError as err:
+        st.session_state.pop("wiki_updates", None)
+        st.session_state.upload_result = ([], [], [str(err)])
+    st.rerun()
+
+
+def apply_wiki_updates(assistant: Assistant, updates: list[WikiUpdate]) -> None:
+    """Değişen maddeleri indirir ve yüklenen dosyalar gibi indeksler; takma adlar korunur."""
+    try:
+        with st.spinner("Değişen maddeler indiriliyor..."):
+            texts = refreshed(updates, SETTINGS.docs_dir)
+    except WikiError as err:
+        st.session_state.upload_result = ([], [], [str(err)])
+        st.rerun()
+    st.session_state.pop("wiki_updates", None)
+    index_uploads(assistant, [(filename, text.encode("utf-8")) for filename, text in texts])
+
+
+def render_wiki_updates(assistant: Assistant) -> None:
+    if st.button("Güncellemeleri denetle", help="Vikipedi'deki son revizyonlarla karşılaştırır; "
+                                                "yalnızca bu düğmeye basınca internete çıkılır."):
+        check_wiki_updates()
+    updates: list[WikiUpdate] | None = st.session_state.get("wiki_updates")
+    if updates is None:
+        return
+    if not updates:
+        st.caption("Tüm maddeler güncel.")
+        return
+    st.markdown("\n".join(
+        f"- {u.doc.title}: {u.doc.revision} → {u.latest}" if u.latest is not None
+        else f"- {u.doc.title}: Vikipedi'de bulunamadı, dokunulmayacak" for u in updates))
+    changed = [u for u in updates if u.latest is not None]
+    if changed and st.button(f"Güncelle ({len(changed)})"):
+        apply_wiki_updates(assistant, changed)
 
 
 def render_upload_result() -> None:
@@ -186,6 +227,8 @@ with st.sidebar:
         aliases = st.text_input("Takma adlar (isteğe bağlı)", placeholder="virgülle ayırın")
         if st.form_submit_button("İndir ve indeksle") and query.strip():
             add_from_wikipedia(assistant, query, aliases)
+    with st.expander("Vikipedi güncellemeleri"):
+        render_wiki_updates(assistant)
     render_upload_result()
     with st.expander("Doküman sil"):
         with st.form("delete"):

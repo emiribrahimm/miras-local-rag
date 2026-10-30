@@ -160,3 +160,43 @@ def test_bad_wikipedia_link_shows_error(app, settings):
     assert not app.exception
     assert "tr.wikipedia.org" in app.sidebar.error[0].value
     assert not (settings.docs_dir / "ani.md").exists()
+
+
+def test_wikipedia_updates_are_checked_and_applied(app, settings, monkeypatch):
+    import miras.wiki
+
+    (settings.docs_dir / "ani.md").write_text(
+        "---\ntitle: Ani\naliases: Ani Harabeleri\nsource: https://tr.wikipedia.org/wiki/Ani\n"
+        "revision: 1 (2026-08-01T00:00:00Z)\n---\n\n# Ani\n\nEski metin.\n", encoding="utf-8")
+    monkeypatch.setattr(miras.wiki, "latest_revisions", lambda titles: {"Ani": 2})
+    page = {"title": "Ani", "extract": "Ani ören yeri Kars ilinde bulunan bir Orta Çağ kentidir.",
+            "revisions": [{"revid": 2, "timestamp": "2026-10-01T00:00:00Z"}]}
+    monkeypatch.setattr(miras.wiki, "fetch", lambda title: {"pages": [page]})
+
+    next(b for b in app.sidebar.button if b.label == "Güncellemeleri denetle").click().run()
+    assert not app.exception
+    assert any("Ani: 1 → 2" in m.value for m in app.sidebar.markdown)
+    next(b for b in app.sidebar.button if b.label == "Güncelle (1)").click().run()
+    assert not app.exception
+    text = (settings.docs_dir / "ani.md").read_text(encoding="utf-8")
+    assert "revision: 2" in text and "aliases: Ani Harabeleri" in text and "Eski metin" not in text
+    assert "İndekslendi: ani.md" in app.sidebar.success[0].value
+    assert not any(b.label.startswith("Güncelle (") for b in app.sidebar.button)
+
+    next(b for b in app.sidebar.button if b.label == "Güncellemeleri denetle").click().run()
+    assert any("Tüm maddeler güncel." in c.value for c in app.sidebar.caption)
+
+
+def test_wikipedia_update_check_offline_shows_error(app, settings, monkeypatch):
+    import miras.wiki
+
+    def offline(params):
+        raise miras.wiki.WikiError("Vikipedi'ye ulaşılamadı: ağ yok")
+
+    monkeypatch.setattr(miras.wiki, "_get", offline)
+    (settings.docs_dir / "ani.md").write_text(
+        "---\ntitle: Ani\nsource: https://tr.wikipedia.org/wiki/Ani\n---\n\nx\n", encoding="utf-8")
+    next(b for b in app.sidebar.button if b.label == "Güncellemeleri denetle").click().run()
+    assert not app.exception
+    assert "ulaşılamadı" in app.sidebar.error[0].value
+    assert not any(b.label.startswith("Güncelle (") for b in app.sidebar.button)
