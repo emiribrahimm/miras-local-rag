@@ -94,6 +94,7 @@ uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # also prints chunks and timings
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # needs internet
+uv run python main.py update-wiki --check   # which articles changed on Wikipedia, needs internet
 uv run python main.py calibrate             # re-measure the similarity threshold
 uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
@@ -127,6 +128,13 @@ or `add-wiki`. The article is downloaded, converted the same way as the ones in 
 thing that goes online, and only when you press the button or run the command. If the name was a
 redirect ("Truva" -> Troya) it's added as an alias, disambiguation pages are refused, and adding
 an article that's already there updates it and keeps its aliases.
+
+`update-wiki` (or "Vikipedi güncellemeleri" in the sidebar) compares the revision number in each
+Wikipedia doc's header with the latest one, in a single request for all of them, and lists the
+ones that changed. Without `--check` those get downloaded again under the same file name, keeping
+their aliases, and re-indexed. An article that can't be found anymore is only reported, its file
+is left alone. Answers to repeated questions about an updated article miss the cache on their own,
+since the chunks in the prompt changed.
 
 After adding or removing documents you'll probably want to rerun `calibrate` and update the topic
 description in `miras/prompts.py` too. An optional header at the top of a file sets the title and
@@ -171,7 +179,8 @@ model.
   to be refused by the model.
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
   bigger typos like "Gbeklitpe" fall back to plain embedding search.
-- Answers are only as good as the Wikipedia revisions in `data/docs/`.
+- Answers are only as good as the Wikipedia revisions in `data/docs/` (`update-wiki` brings them
+  up to date, but the eval set was written against the current ones).
 
 ## Credits and license
 
@@ -264,6 +273,7 @@ uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de gösterir
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # internet gerekir
+uv run python main.py update-wiki --check   # Vikipedi'de değişen maddeler, internet gerekir
 uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
 uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
@@ -297,6 +307,12 @@ dönüştürülüyor (kaynakça gibi bölümler atılıyor, kaynak ve revizyonlu
 indeksleniyor. İnternete çıkan tek şey bu, o da sadece düğmeye basınca ya da komut çalışınca.
 Yazılan ad bir yönlendirmeyse ("Truva" -> Troya) takma ad olarak ekleniyor, anlam ayrımı sayfaları
 reddediliyor; zaten ekli bir madde tekrar eklenirse güncelleniyor ve takma adları korunuyor.
+
+`update-wiki` (ya da kenar çubuğundaki "Vikipedi güncellemeleri") Vikipedi kaynaklı her dokümanın
+üst bilgisindeki revizyon numarasını, hepsi için tek bir istekle, en son revizyonla karşılaştırıp
+değişenleri listeliyor. `--check` verilmezse bunlar aynı dosya adıyla ve takma adları korunarak
+yeniden indirilip indeksleniyor. Artık bulunamayan bir madde yalnızca bildiriliyor, dosyasına
+dokunulmuyor.
 
 Doküman ekleyip sildikten sonra `calibrate`
 ile eşiği tekrar ölçmek ve `miras/prompts.py` içindeki konu tanımını güncellemek iyi olur. Dosyanın
@@ -341,7 +357,8 @@ raporda.
   modelin reddetmesine kalır.
 - Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
   gibi daha büyük hatalarda sadece embedding araması kalıyor.
-- Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru.
+- Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru (`update-wiki` onları
+  güncelliyor, ama değerlendirme seti şu anki revizyonlara göre yazıldı).
 
 ### Kaynaklar ve lisans
 
