@@ -15,6 +15,7 @@ from pathlib import Path
 from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ROOT, SETTINGS, Settings
+from .export import conversation_markdown
 from .feedback import eval_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
@@ -177,12 +178,30 @@ def _chat_history(path: Path) -> Callable[[], None]:
     return save
 
 
+def _save_chat(turns: list[tuple[str, Answer]], target: str, settings: Settings) -> None:
+    """Sohbeti web arayüzündeki indirme düğmesiyle aynı Markdown biçiminde yazar."""
+    if not turns:
+        print("Henüz kaydedilecek soru yok.")
+        return
+    now = datetime.now()
+    path = Path(target or f"miras-sohbet-{now:%Y%m%d-%H%M}.md")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(conversation_markdown(turns, settings, now), encoding="utf-8")
+    except OSError as err:
+        print(f"Kaydedilemedi: {err}")
+        return
+    print(f"{len(turns)} soru -> {path}")
+
+
 def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     print("Miras — Türkiye'nin UNESCO Dünya Mirası alanları asistanı. Çıkmak için 'çık' yazın.")
     print("Alan adı geçmeyen sorular önceki sorunun konusuyla sorulur; sıfırlamak için 'yeni' yazın.")
+    print("Sohbeti Markdown olarak kaydetmek için 'kaydet [dosya.md]' yazın.")
     save_history = _chat_history(CHAT_HISTORY)
     last: Answer | None = None
+    turns: list[tuple[str, Answer]] = []
     try:
         while True:
             try:
@@ -195,7 +214,12 @@ def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
             if question.lower() == "yeni":
                 last = None
                 continue
+            command, _, target = question.partition(" ")
+            if command.lower() == "kaydet":
+                _save_chat(turns, target.strip(), settings)
+                continue
             last = _answer_streaming(assistant, question, args.verbose, last)
+            turns.append((question, last))
     finally:
         save_history()
 

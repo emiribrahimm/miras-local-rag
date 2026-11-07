@@ -111,3 +111,13 @@ def test_chat_answers_until_quit_and_saves_history(chat, backend, tmp_path):
     assert "Efes İzmir'dedir [K1]." in out and len(backend.chat_calls) == 1
     pytest.importorskip("readline")
     assert (tmp_path / "gecmis" / "chat_history").exists()
+
+
+def test_chat_saves_conversation_as_markdown(chat, backend, tmp_path):
+    backend.reply = "Efes İzmir'dedir [K1]."
+    target = tmp_path / "sohbet" / "efes.md"
+    out = chat("kaydet", "Efes nerede?", f"kaydet {target}", "q")
+    assert "Henüz kaydedilecek soru yok." in out and f"1 soru -> {target}" in out
+    text = target.read_text(encoding="utf-8")
+    assert text.startswith("# Miras sohbeti") and "> Efes nerede?" in text
+    assert "Efes İzmir'dedir [K1]." in text and "[K1] Efes (efes.md" in text
