@@ -16,7 +16,7 @@ from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ROOT, SETTINGS, Settings
 from .export import conversation_markdown
-from .feedback import eval_candidates
+from .feedback import answer_sources, eval_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import TITLE_BOOST, IndexError_, Retriever
@@ -123,7 +123,23 @@ def cmd_update_wiki(args: argparse.Namespace, settings: Settings) -> None:
     cmd_ingest(argparse.Namespace(rebuild=False), settings)
 
 
+def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
+    """Betikler için cevap: metin, reddetme sebebi, parçalar (destek cümleleriyle) ve süreler."""
+    sources = [{"label": f"K{i + 1}", **source, "source_url": answer.hits[i].chunk.source_url,
+                "support": answer.support.get(i, [])}
+               for i, source in enumerate(answer_sources(answer))]
+    return {"question": question, "answer": answer.text, "refused": answer.refused,
+            "refusal_reason": answer.refusal_reason, "carried": list(answer.carried),
+            "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
+            "retrieval_seconds": round(answer.retrieval_seconds, 3),
+            "generation_seconds": round(answer.generation_seconds, 3)}
+
+
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
+    if args.json:
+        answer = _assistant(settings).ask(args.question)
+        print(json.dumps(answer_json(args.question, answer, settings), ensure_ascii=False, indent=2))
+        return
     _answer_streaming(_assistant(settings), args.question, args.verbose)
 
 
@@ -433,6 +449,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("ask", help="Tek bir soru sor")
     p.add_argument("question")
     p.add_argument("-v", "--verbose", action="store_true", help="Parça metinlerini ve süreleri göster")
+    p.add_argument("--json", action="store_true", help="Cevabı ve kaynakları JSON olarak yaz (akış yok)")
     p.set_defaults(func=cmd_ask)
 
     p = sub.add_parser("search", help="Soruya getirilen parçaları göster (sohbet modeli çağırmaz)")

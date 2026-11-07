@@ -121,3 +121,23 @@ def test_chat_saves_conversation_as_markdown(chat, backend, tmp_path):
     text = target.read_text(encoding="utf-8")
     assert text.startswith("# Miras sohbeti") and "> Efes nerede?" in text
     assert "Efes İzmir'dedir [K1]." in text and "[K1] Efes (efes.md" in text
+
+
+def test_ask_json_has_answer_sources_and_support(run, backend):
+    import json
+
+    backend.reply = "Göbeklitepe 2018 yılında listeye girdi [K1]."
+    code, out, _ = run("ask", "--json", "Göbeklitepe hangi yıl listeye girdi?")
+    data = json.loads(out)
+    assert code == 0 and data["answer"] == backend.reply and data["refused"] is False
+    first = data["sources"][0]
+    assert first["label"] == "K1" and first["filename"] == "gobeklitepe.md" and first["cited"] is True
+    assert first["support"] == ["Göbeklitepe 2018 yılında Dünya Mirası listesine girdi."]
+    assert first["source_url"] == "https://example.org/g"
+
+
+def test_ask_json_reports_refusal(run):
+    import json
+
+    data = json.loads(run("ask", "--json", "Pizza hamuru tarifi nedir?")[1])
+    assert data["refused"] is True and data["refusal_reason"] == "low_similarity"
