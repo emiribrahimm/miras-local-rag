@@ -48,6 +48,10 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
         doc = parse_document(raw, fallback_title=path.stem)
         chunks = chunk_document(doc, settings.chunk_target_chars, settings.chunk_max_chars)
         if not chunks:
+            # Metni silinmiş dosyanın eski parçaları aramada kalmasın.
+            if path.name in known:
+                store.delete_document(path.name)
+                report.removed.append(path.name)
             continue
         on_progress(f"{path.name}: {len(chunks)} parça gömülüyor...")
         embeddings = backend.embed_documents([c.embedding_text for c in chunks])

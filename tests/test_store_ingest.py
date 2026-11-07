@@ -247,3 +247,11 @@ def test_remove_document_rejects_bad_names(store, settings, tmp_path):
         with pytest.raises(ValueError):
             remove_document(store, settings.docs_dir, name)
     assert outside.exists() and store.counts() == (2, 3)
+
+
+def test_file_emptied_down_to_header_drops_old_chunks(store, backend, settings):
+    (settings.docs_dir / "efes.md").write_text("---\ntitle: Efes\n---\n\n# Efes\n", encoding="utf-8")
+    report = ingest(store, backend, settings)
+    assert report.removed == ["efes.md"] and report.added == []
+    assert store.counts() == (1, 2)
+    assert ingest(store, backend, settings).removed == []
