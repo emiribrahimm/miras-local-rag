@@ -13,6 +13,16 @@ def _env(name: str, default: str) -> str:
     return os.environ.get(f"MIRAS_{name}", default)
 
 
+def _env_number(name: str, default: str, kind: type[int] | type[float]) -> int | float:
+    """Sayısal ortam değişkeni; "abc" gibi değerlerde hangi değişkenin bozuk olduğunu söyler."""
+    value = _env(name, default)
+    try:
+        return kind(value.replace(",", ".") if kind is float else value)
+    except ValueError:
+        expected = "tam sayı" if kind is int else "sayı"
+        raise ValueError(f"MIRAS_{name} bir {expected} olmalı, '{value}' verildi.") from None
+
+
 @dataclass(frozen=True)
 class Settings:
     docs_dir: Path = Path(_env("DOCS_DIR", str(ROOT / "data" / "docs")))
@@ -32,17 +42,17 @@ class Settings:
     # Arama: kaç parça getirilecek ve en iyi parçanın benzerliği bu eşiğin
     # altındaysa model hiç çağrılmadan "bilmiyorum" cevabı verilir.
     # Eşik elle seçilmedi; `python main.py calibrate` ile ölçülüp yazıldı.
-    top_k: int = int(_env("TOP_K", "4"))
-    min_similarity: float = float(_env("MIN_SIMILARITY", "0.53"))
+    top_k: int = _env_number("TOP_K", "4", int)
+    min_similarity: float = _env_number("MIN_SIMILARITY", "0.53", float)
     # Hibrit arama: BM25 anahtar kelime skorunun (0–1) sıralamadaki ağırlığı. 0 = yalnızca
     # embedding. Kapı eşiği her durumda ham kosinüs skoruna bakar. Değer `python main.py
     # tune-hybrid` ile ölçülmeden açılmamalı; varsayılan bu yüzden kapalı.
-    bm25_weight: float = float(_env("BM25_WEIGHT", "0.0"))
+    bm25_weight: float = _env_number("BM25_WEIGHT", "0.0", float)
     # Takip soruları: alan adı geçmeyen soru önceki turun konusuyla sorulur, ama sorunun
     # kendisinin en iyi benzerliği bu değerin altındaysa (konu dışı) konu taşınmaz; aksi halde
     # alan adı benzerliği şişirip konu dışı soruyu kapıdan geçirir. 0 = kontrol kapalı.
     # Konu dışı sorular 0.31–0.44 aldı; `python main.py calibrate` ile ölçülmesi önerilir.
-    followup_min_similarity: float = float(_env("FOLLOWUP_MIN_SIMILARITY", "0.40"))
+    followup_min_similarity: float = _env_number("FOLLOWUP_MIN_SIMILARITY", "0.40", float)
 
     # Cevap önbelleği: aynı model, ayarlar ve aynı prompt (soru + getirilen parçalar) için ham
     # model çıktısı SQLite'ta saklanır ve tekrar sorulduğunda model çağrılmaz. "0" = kapalı.
