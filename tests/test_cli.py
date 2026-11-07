@@ -43,3 +43,10 @@ def test_status_reports_index_and_pending_changes(run, settings):
 def test_status_warns_when_embedding_model_changed(run, settings, monkeypatch):
     monkeypatch.setattr(cli, "SETTINGS", dataclasses.replace(settings, embed_model="baska"))
     assert "`ingest --rebuild` gerekli" in run("status")[1]
+
+
+def test_docs_command_lists_indexed_documents(run):
+    out = run("docs")[1]
+    assert out.splitlines()[:3] == ["Efes  (efes.md, 1 parça)", "     takma adlar: Ephesos, Ephesus",
+                                    "Göbeklitepe  (gobeklitepe.md, 2 parça)"]
+    assert "     https://example.org/g" in out and out.endswith("2 doküman, 3 parça\n")

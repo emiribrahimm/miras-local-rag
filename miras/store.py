@@ -171,6 +171,15 @@ class Store:
         chunks = self.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
         return docs, chunks
 
+    def documents(self) -> list[dict]:
+        """İndeksteki dokümanlar başlığa göre: dosya, başlık, kaynak, takma adlar, parça sayısı."""
+        rows = self.conn.execute(
+            "SELECT d.filename, d.title, d.source_url, d.aliases, COUNT(c.id) FROM documents d "
+            "LEFT JOIN chunks c ON c.doc_id = d.id GROUP BY d.id ORDER BY d.title, d.filename").fetchall()
+        return [{"filename": f, "title": t, "source_url": u, "chunks": n,
+                 "aliases": tuple(a.strip() for a in aliases.split(",") if a.strip())}
+                for f, t, u, aliases, n in rows]
+
     def load_all(self) -> tuple[list[StoredChunk], np.ndarray]:
         rows = self.conn.execute(
             "SELECT c.id, d.filename, d.title, d.source_url, c.section, c.text, d.aliases, "

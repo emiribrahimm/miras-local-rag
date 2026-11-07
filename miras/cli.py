@@ -1,4 +1,4 @@
-"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback, status, cache."""
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback, status, docs, cache."""
 
 from __future__ import annotations
 
@@ -284,6 +284,20 @@ def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
     print("`python main.py ingest` ile indeksi güncelleyin.")
 
 
+def cmd_docs(args: argparse.Namespace, settings: Settings) -> None:
+    docs = Store(settings.db_path).documents()
+    if not docs:
+        print("İndeks boş. Önce `python main.py ingest` çalıştırın.")
+        return
+    for doc in docs:
+        print(f"{doc['title']}  ({doc['filename']}, {doc['chunks']} parça)")
+        if doc["aliases"]:
+            print(f"     takma adlar: {', '.join(doc['aliases'])}")
+        if doc["source_url"]:
+            print(f"     {doc['source_url']}")
+    print(f"\n{len(docs)} doküman, {sum(d['chunks'] for d in docs)} parça")
+
+
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
     if args.clear:
@@ -338,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
     p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("docs", help="İndeksteki dokümanları listele (model çağırmaz)")
+    p.set_defaults(func=cmd_docs)
 
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
     p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")
