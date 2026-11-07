@@ -1,4 +1,4 @@
-"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback,
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, search, chat, eval, calibrate, feedback,
 status, docs, remove-doc, cache."""
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from .config import ROOT, SETTINGS, Settings
 from .feedback import eval_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
-from .retrieval import IndexError_, Retriever
+from .retrieval import TITLE_BOOST, IndexError_, Retriever
 from .store import Store
 from .wiki import WikiError, article, outdated, refreshed
 
@@ -119,6 +119,32 @@ def cmd_update_wiki(args: argparse.Namespace, settings: Settings) -> None:
 
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
     _answer_streaming(_assistant(settings), args.question, args.verbose)
+
+
+def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
+    """Modele gidecek parçaları gösterir; yalnızca embedding modeli yüklenir."""
+    if args.k is not None:
+        try:
+            settings = dataclasses.replace(settings, top_k=args.k)
+        except ValueError as err:
+            raise CommandError(str(err)) from err
+    assistant = _assistant(settings, cache=False)
+    prepared = assistant.prepare(args.question)
+    if prepared.refusal_reason == "empty":
+        raise CommandError("Bir soru yazın.")
+    mentioned = assistant.retriever.mentioned_titles(prepared.question)
+    if mentioned:
+        print(f"Soruda geçen alanlar: {', '.join(sorted(mentioned))} (sıralamada +{TITLE_BOOST})")
+    for i, hit in enumerate(prepared.hits, start=1):
+        print(f"[K{i}] {hit.score:.3f}  {hit.chunk.section}  ({hit.chunk.filename})")
+        print(f"     {' '.join(hit.chunk.text.split())[:args.chars]}")
+    best = max(hit.score for hit in prepared.hits)
+    if prepared.refusal_reason == "low_similarity":
+        print(f"\nEn iyi benzerlik {best:.3f} < eşik {settings.min_similarity}: model çağrılmaz, "
+              "soru reddedilir.")
+    else:
+        print(f"\nEn iyi benzerlik {best:.3f} ≥ eşik {settings.min_similarity}: bu parçalar modele gider.")
+    print(f"(arama {prepared.retrieval_seconds:.2f} sn)")
 
 
 def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
@@ -350,6 +376,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("question")
     p.add_argument("-v", "--verbose", action="store_true", help="Parça metinlerini ve süreleri göster")
     p.set_defaults(func=cmd_ask)
+
+    p = sub.add_parser("search", help="Soruya getirilen parçaları göster (sohbet modeli çağırmaz)")
+    p.add_argument("question")
+    p.add_argument("-k", type=int, help="Kaç parça getirilsin (varsayılan: top_k)")
+    p.add_argument("--chars", type=int, default=200, help="Parça metninden gösterilecek karakter")
+    p.set_defaults(func=cmd_search)
 
     p = sub.add_parser("chat", help="Etkileşimli soru-cevap döngüsü")
     p.add_argument("-v", "--verbose", action="store_true")

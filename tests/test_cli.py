@@ -72,3 +72,22 @@ def test_last_doc_cannot_be_removed(run, settings):
     code, _, err = run("remove-doc", "gobeklitepe.md")
     assert code == 1 and "En az bir doküman kalmalı." in err
     assert (settings.docs_dir / "gobeklitepe.md").exists()
+
+
+def test_search_shows_chunks_and_gate_without_chat_model(run, backend):
+    code, out, _ = run("search", "Göbeklitepe hangi yıl listeye girdi?", "-k", "1")
+    assert code == 0 and backend.chat_calls == []
+    lines = out.splitlines()
+    assert lines[0] == "Soruda geçen alanlar: Göbeklitepe (sıralamada +0.1)"
+    assert lines[1].startswith("[K1] ") and "Göbeklitepe › Koruma  (gobeklitepe.md)" in lines[1]
+    assert "[K2]" not in out and "bu parçalar modele gider" in out
+
+
+def test_search_reports_refusal_below_threshold(run):
+    out = run("search", "Pizza hamuru tarifi nedir?")[1]
+    assert "Soruda geçen" not in out and "model çağrılmaz, soru reddedilir" in out
+
+
+def test_search_rejects_bad_k(run):
+    code, _, err = run("search", "Efes nerede?", "-k", "0")
+    assert code == 1 and "top_k en az 1" in err
