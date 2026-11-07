@@ -28,6 +28,8 @@ class Chunk:
 
 def parse_document(raw: str, fallback_title: str) -> Document:
     """Baştaki '---' ile çevrili üst bilgiyi (title, source, aliases) ayırır."""
+    # Windows'ta kaydedilen dosyalarda üst bilgi "\r\n" yüzünden eşleşmiyordu.
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
     meta: dict[str, str] = {}
     body = raw
     match = re.match(r"---\n(.*?)\n---\n", raw, flags=re.DOTALL)

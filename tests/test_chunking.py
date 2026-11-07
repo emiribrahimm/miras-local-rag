@@ -35,3 +35,10 @@ def test_oversized_paragraph_is_split_at_sentences():
     chunks = chunk_document(Document("T", "", body), 900, 1400)
     assert len(chunks) > 1
     assert all(len(c.text) <= 1400 and c.text.endswith(".") for c in chunks)
+
+
+def test_windows_line_endings_keep_front_matter_and_headings():
+    raw = "---\r\ntitle: Efes\r\naliases: Ephesos\r\n---\r\n\r\n# Efes\r\n\r\nMetin.\r\n\r\n## Tarihçe\r\n\r\nEski."
+    doc = parse_document(raw, "yedek")
+    assert (doc.title, doc.aliases) == ("Efes", ("Ephesos",))
+    assert [c.section for c in chunk_document(doc, 5, 100)] == ["Efes", "Efes › Tarihçe"]
