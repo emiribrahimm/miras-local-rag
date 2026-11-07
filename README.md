@@ -127,7 +127,13 @@ questions that carried a topic are marked with `carried` and belong in `followup
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
 `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE` or `MIRAS_DOCS_DIR`. If you change the
-embedding model you'll need `ingest --rebuild`.
+embedding model you'll need `ingest --rebuild`. Values that don't make sense (`MIRAS_TOP_K=0`, a
+threshold above 1, a typo like `MIRAS_TOP_K=dört`) stop it at startup with a message naming the
+setting, instead of quietly breaking the search.
+
+Files have to be UTF-8 (Windows line endings are fine). One that isn't is skipped by `ingest` with
+a warning and its previous version stays in the index; a file emptied down to its header is taken
+out of the index.
 
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
 upload them from the web UI sidebar ("Doküman ekle"), which saves them there and indexes them
@@ -320,7 +326,13 @@ taşınmış sorular `carried` alanıyla işaretli, onların yeri `followups.jso
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
 `MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
-`ingest --rebuild` çalıştırmak gerekiyor.
+`ingest --rebuild` çalıştırmak gerekiyor. Anlamsız değerler (`MIRAS_TOP_K=0`, 1'den büyük bir eşik,
+`MIRAS_TOP_K=dört` gibi bir yazım hatası) aramayı sessizce bozmak yerine açılışta hangi ayarın
+hatalı olduğunu söyleyen bir mesajla durduruyor.
+
+Dosyaların UTF-8 olması gerekiyor (Windows satır sonları sorun değil). UTF-8 olmayan bir dosyayı
+`ingest` uyarı vererek atlıyor ve önceki hali indekste kalıyor; üst bilgisi dışında boşaltılan bir
+dosya indeksten çıkarılıyor.
 
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
 `ingest` çalıştırmanız ya da web arayüzünün kenar çubuğundan ("Doküman ekle") yüklemeniz yeterli.
