@@ -255,3 +255,10 @@ def test_file_emptied_down_to_header_drops_old_chunks(store, backend, settings):
     assert report.removed == ["efes.md"] and report.added == []
     assert store.counts() == (1, 2)
     assert ingest(store, backend, settings).removed == []
+
+
+def test_unreadable_file_is_skipped_and_keeps_old_chunks(store, backend, settings):
+    (settings.docs_dir / "efes.md").write_bytes("# Efes\n\nİzmir".encode("iso8859_9"))
+    report = ingest(store, backend, settings)
+    assert report.skipped == ["efes.md: UTF-8 olarak okunamadı, atlandı."]
+    assert report.removed == [] and store.counts() == (2, 3)

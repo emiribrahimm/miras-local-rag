@@ -77,6 +77,8 @@ def cmd_ingest(args: argparse.Namespace, settings: Settings) -> None:
     docs, chunks = store.counts()
     print(f"Eklenen/güncellenen: {len(report.added)}, değişmeyen: {len(report.unchanged)}, "
           f"silinen: {len(report.removed)}")
+    for message in report.skipped:
+        print(f"Uyarı: {message}", file=sys.stderr)
     print(f"Veritabanı: {docs} doküman, {chunks} parça -> {settings.db_path}")
 
 

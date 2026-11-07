@@ -48,7 +48,9 @@ def index_uploads(assistant: Assistant, uploads: list[tuple[str, bytes]]) -> Non
         store = Store(SETTINGS.db_path)
         try:
             with st.spinner("Dokümanlar gömülüyor..."):
-                added = ingest(store, assistant.backend, SETTINGS).added
+                report = ingest(store, assistant.backend, SETTINGS)
+                added = report.added
+                errors += report.skipped
                 # Önbellekteki asistan paylaşıldığı için yeni parçalar hemen aranabilir olur.
                 assistant.retriever = Retriever(store, assistant.backend.embed_model)
         except (BackendError, IndexError_, FileNotFoundError) as err:

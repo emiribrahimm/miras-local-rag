@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .backends import Backend
@@ -22,6 +22,8 @@ class IngestReport:
     unchanged: list[str]
     removed: list[str]
     chunks_embedded: int
+    # Okunamayan dosyalar ("x.md: UTF-8 olarak okunamadı"); indeksteki eski halleri korunur.
+    skipped: list[str] = field(default_factory=list)
 
 
 def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool = False,
@@ -38,7 +40,11 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
     known = store.fingerprints()
     report = IngestReport([], [], [], 0)
     for path in files:
-        raw = path.read_text(encoding="utf-8")
+        try:
+            raw = path.read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            report.skipped.append(f"{path.name}: UTF-8 olarak okunamadı, atlandı.")
+            continue
         fingerprint = hashlib.sha256(
             f"{settings.chunk_target_chars}|{settings.chunk_max_chars}|{raw}".encode("utf-8")
         ).hexdigest()
@@ -61,7 +67,7 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
         report.added.append(path.name)
         report.chunks_embedded += len(chunks)
 
-    for filename in set(known) - {p.name for p in files}:
+    for filename in sorted(set(known) - {p.name for p in files}):
         store.delete_document(filename)
         report.removed.append(filename)
 
