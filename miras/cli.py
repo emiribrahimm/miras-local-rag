@@ -1,4 +1,4 @@
-"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback."""
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback, cache."""
 
 from __future__ import annotations
 
@@ -257,6 +257,14 @@ def cmd_feedback(args: argparse.Namespace, settings: Settings) -> None:
               "carried alanı olanlar takip sorusu (followups.json).")
 
 
+def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
+    store = Store(settings.db_path)
+    if args.clear:
+        print(f"Önbellekten {store.clear_answer_cache()} cevap silindi.")
+    else:
+        print(f"Önbellekte {store.cache_size()} cevap var -> {settings.db_path}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="main.py", description="Miras: Foundry Local ile çalışan yerel RAG asistanı")
@@ -300,6 +308,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--export", type=Path, metavar="DOSYA",
                    help="Beğenilmeyen soruları eval adayı olarak JSON'a yaz")
     p.set_defaults(func=cmd_feedback)
+
+    p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
+    p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")
+    p.set_defaults(func=cmd_cache)
 
     args = parser.parse_args(argv)
     overrides = {"chat_model": args.model, "chat_device": args.device}

@@ -125,6 +125,14 @@ class Store:
             self.conn.execute("DELETE FROM answer_cache WHERE key NOT IN (SELECT key FROM answer_cache "
                               "ORDER BY created DESC, rowid DESC LIMIT ?)", (MAX_CACHED_ANSWERS,))
 
+    def cache_size(self) -> int:
+        return self.conn.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0]
+
+    def clear_answer_cache(self) -> int:
+        """Önbelleği boşaltır, silinen cevap sayısını döner. İndeks ve oylar kalır."""
+        with self.conn:
+            return self.conn.execute("DELETE FROM answer_cache").rowcount
+
     # --- geri bildirim -------------------------------------------------------
     # İndeksten bağımsız kullanıcı verisi: `clear()` (ingest --rebuild) bunlara dokunmaz.
     def save_feedback(self, key: str, rating: int, question: str, carried: tuple[str, ...],
