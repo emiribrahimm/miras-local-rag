@@ -1,4 +1,4 @@
-"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback, cache."""
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback, status, cache."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ROOT, SETTINGS, Settings
 from .feedback import eval_candidates
-from .ingest import ingest, save_uploads
+from .ingest import ingest, pending_changes, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import IndexError_, Retriever
 from .store import Store
@@ -257,6 +257,33 @@ def cmd_feedback(args: argparse.Namespace, settings: Settings) -> None:
               "carried alanı olanlar takip sorusu (followups.json).")
 
 
+def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
+    store = Store(settings.db_path)
+    docs, chunks = store.counts()
+    indexed_with = store.get_meta("embed_model")
+    votes = store.feedback_rows()
+    up = sum(r["rating"] > 0 for r in votes)
+    print(f"Veritabanı: {settings.db_path}")
+    print(f"İndeks: {docs} doküman, {chunks} parça" + (f" ({indexed_with})" if indexed_with else ""))
+    print(f"Önbellek: {store.cache_size()} cevap · oylar: 👍 {up}  👎 {len(votes) - up}")
+    print(f"Sohbet modeli: {settings.chat_model} ({settings.chat_device}), top_k {settings.top_k}, "
+          f"eşik {settings.min_similarity}, bm25 {settings.bm25_weight}")
+    if indexed_with and indexed_with != settings.embed_model:
+        print(f"\nİndeks '{indexed_with}' ile kurulmuş, ayarlardaki model '{settings.embed_model}': "
+              "`ingest --rebuild` gerekli.")
+        return
+    pending = pending_changes(store, settings)
+    if not pending:
+        print(f"\n{settings.docs_dir} ile indeks aynı.")
+        return
+    print(f"\n{settings.docs_dir} içinde indekslenmemiş değişiklikler var:")
+    for name in pending.changed:
+        print(f"  + {name}")
+    for name in pending.missing:
+        print(f"  - {name} (klasörde yok)")
+    print("`python main.py ingest` ile indeksi güncelleyin.")
+
+
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
     if args.clear:
@@ -308,6 +335,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--export", type=Path, metavar="DOSYA",
                    help="Beğenilmeyen soruları eval adayı olarak JSON'a yaz")
     p.set_defaults(func=cmd_feedback)
+
+    p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
+    p.set_defaults(func=cmd_status)
 
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
     p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")
