@@ -65,8 +65,12 @@ class Store:
     def __init__(self, path: Path | str) -> None:
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(path), check_same_thread=False)
+        # Web arayüzü açıkken CLI'dan ingest/oy yazılabilsin: WAL'da okuyanlar yazanı bekletmez,
+        # kısa süren kilitler için de hata yerine 10 sn beklenir.
+        self.conn = sqlite3.connect(str(path), check_same_thread=False, timeout=10)
         self.conn.execute("PRAGMA foreign_keys = ON")
+        if str(path) != ":memory:":
+            self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.executescript(SCHEMA)
         # Takma adlardan önce oluşturulmuş veritabanlarına kolon eklenir.
         columns = {row[1] for row in self.conn.execute("PRAGMA table_info(documents)")}

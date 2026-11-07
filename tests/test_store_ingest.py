@@ -276,3 +276,13 @@ def test_pending_changes_lists_new_edited_and_missing_files(store, backend, sett
     assert pending.changed == ["ani.md", "efes.md"] and pending.missing == ["gobeklitepe.md"]
     ingest(store, backend, settings)
     assert not pending_changes(store, settings)
+
+
+def test_file_database_uses_wal_so_readers_do_not_block_writers(store, settings):
+    assert store.conn.execute("PRAGMA journal_mode").fetchone() == ("wal",)
+    reader = Store(settings.db_path)
+    reader.conn.execute("BEGIN")
+    reader.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()
+    store.cache_answer("k", "Cevap.")
+    assert Store(settings.db_path).cached_answer("k") == "Cevap."
+    reader.conn.rollback()
