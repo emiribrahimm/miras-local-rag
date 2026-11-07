@@ -14,7 +14,7 @@ from miras.config import SETTINGS
 from miras.export import conversation_markdown
 from miras.highlight import emphasize
 from miras.feedback import save_vote
-from miras.ingest import ingest, remove_document, save_uploads
+from miras.ingest import ingest, pending_changes, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant
 from miras.retrieval import IndexError_, Retriever
 from miras.store import Store
@@ -40,25 +40,51 @@ def load_assistant() -> Assistant:
     return Assistant(backend, retriever, SETTINGS, cache=store)
 
 
+def reindex(assistant: Assistant) -> tuple[list[str], list[str]]:
+    """Doküman klasörünü indeksle eşitler ve aramayı yeni indeksle yeniler; (eklenenler, hatalar)."""
+    added: list[str] = []
+    errors: list[str] = []
+    store = Store(SETTINGS.db_path)
+    try:
+        with st.spinner("Dokümanlar gömülüyor..."):
+            report = ingest(store, assistant.backend, SETTINGS)
+            added = report.added
+            errors += report.skipped
+            # Önbellekteki asistan paylaşıldığı için yeni parçalar hemen aranabilir olur.
+            assistant.retriever = Retriever(store, assistant.backend.embed_model)
+    except (BackendError, IndexError_, FileNotFoundError) as err:
+        errors.append(str(err))
+    finally:
+        store.close()
+    return added, errors
+
+
 def index_uploads(assistant: Assistant, uploads: list[tuple[str, bytes]]) -> None:
     """Yüklenen dosyaları kaydeder, değişenleri gömer ve aramayı yeni indeksle yeniler."""
     saved, errors = save_uploads(SETTINGS.docs_dir, uploads)
     added: list[str] = []
     if saved:
-        store = Store(SETTINGS.db_path)
-        try:
-            with st.spinner("Dokümanlar gömülüyor..."):
-                report = ingest(store, assistant.backend, SETTINGS)
-                added = report.added
-                errors += report.skipped
-                # Önbellekteki asistan paylaşıldığı için yeni parçalar hemen aranabilir olur.
-                assistant.retriever = Retriever(store, assistant.backend.embed_model)
-        except (BackendError, IndexError_, FileNotFoundError) as err:
-            errors.append(str(err))
-        finally:
-            store.close()
+        added, ingest_errors = reindex(assistant)
+        errors += ingest_errors
     st.session_state.upload_result = (saved, added, errors)
     st.rerun()
+
+
+def render_pending_changes(assistant: Assistant) -> None:
+    """Klasörde indekse girmemiş değişiklik varsa (elle eklenen/silinen dosya) uyarır."""
+    store = Store(SETTINGS.db_path)
+    try:
+        pending = pending_changes(store, SETTINGS)
+    finally:
+        store.close()
+    if not pending:
+        return
+    names = pending.changed + [f"{name} (silinmiş)" for name in pending.missing]
+    st.warning("Klasörde indekslenmemiş değişiklik var: " + ", ".join(names))
+    if st.button("İndeksi güncelle"):
+        added, errors = reindex(assistant)
+        st.session_state.upload_result = (pending.changed, added, errors)
+        st.rerun()
 
 
 def add_from_wikipedia(assistant: Assistant, query: str, aliases: str) -> None:
@@ -217,6 +243,7 @@ with st.sidebar:
     titles = {c.filename: c.title for c in assistant.retriever.chunks}
     filenames = sorted(titles, key=lambda f: (titles[f], f))
     st.markdown("\n".join(f"- {titles[f]} ({chunk_counts[f]} parça)" for f in filenames))
+    render_pending_changes(assistant)
     with st.form("upload", clear_on_submit=True):
         uploads = st.file_uploader("Doküman ekle", type=["md", "txt"], accept_multiple_files=True,
                                    help="Başlık ve takma adlar için dosyanın başına README'deki "

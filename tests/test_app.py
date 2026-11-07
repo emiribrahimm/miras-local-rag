@@ -200,3 +200,16 @@ def test_wikipedia_update_check_offline_shows_error(app, settings, monkeypatch):
     assert not app.exception
     assert "ulaşılamadı" in app.sidebar.error[0].value
     assert not any(b.label.startswith("Güncelle (") for b in app.sidebar.button)
+
+
+def test_files_changed_outside_the_app_can_be_indexed(app, settings):
+    (settings.docs_dir / "ani.md").write_text("# Ani\n\nAni ören yeri Kars ilinde bulunan bir kenttir.\n",
+                                              encoding="utf-8")
+    (settings.docs_dir / "efes.md").unlink()
+    app.run()
+    assert "ani.md, efes.md (silinmiş)" in app.sidebar.warning[0].value
+    next(b for b in app.sidebar.button if b.label == "İndeksi güncelle").click().run()
+    assert not app.exception
+    assert "İndekslendi: ani.md" in app.sidebar.success[0].value
+    assert not app.sidebar.warning
+    assert "- Ani (1 parça)" in app.sidebar.markdown[1].value and "Efes" not in app.sidebar.markdown[1].value
