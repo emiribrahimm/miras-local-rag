@@ -92,6 +92,8 @@ uv run streamlit run app.py                 # web UI
 uv run python main.py chat                  # interactive, type "çık" to quit
 uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # also prints chunks and timings
+uv run python main.py ask --json "Ani hangi ilde?"   # answer, sources and timings as JSON
+uv run python main.py search "Ani hangi ilde?"   # retrieved chunks and the gate, no chat model
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # needs internet
 uv run python main.py update-wiki --check   # which articles changed on Wikipedia, needs internet
@@ -99,11 +101,21 @@ uv run python main.py calibrate             # re-measure the similarity threshol
 uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
 uv run python main.py feedback              # thumbs down answers from the web UI
+uv run python main.py status                # index, cache, votes, files not indexed yet
+uv run python main.py docs                  # what's in the index
+uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index
+uv run python main.py cache --clear         # empty the answer cache
 uv run pytest                               # no models needed, ~1s
 ```
 
 In the web UI, "Sohbeti indir (.md)" in the sidebar saves the conversation as a Markdown file,
-with the cited chunks and their Wikipedia links under each answer.
+with the cited chunks and their Wikipedia links under each answer. In `chat`, `kaydet` does the
+same (`kaydet notlar/ani.md` to pick the file), and the up arrow brings back questions from
+earlier sessions (kept in `~/.miras-rag/chat_history`).
+
+`search` is for looking at retrieval on its own: it loads only the embedding model and prints the
+chunks that would go to the chat model, their similarity, which site names it spotted in the
+question and whether the question passes the threshold. `-k` changes how many chunks come back.
 
 Each answer also gets a 👍/👎. Votes go into the same SQLite file with the question, the answer
 and the retrieved chunks (`ingest --rebuild` keeps them). `feedback` lists the 👎 ones (`--all`
@@ -119,8 +131,11 @@ embedding model you'll need `ingest --rebuild`.
 
 To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
 upload them from the web UI sidebar ("Doküman ekle"), which saves them there and indexes them
-right away. Only changed files get re-embedded. "Doküman sil" in the same sidebar removes a file
-from `data/docs/` and the index (nothing to re-embed), as long as at least one document is left.
+right away. Only changed files get re-embedded. "Doküman sil" in the same sidebar (or
+`remove-doc`) removes a file from `data/docs/` and the index (nothing to re-embed), as long as at
+least one document is left. Files edited or deleted by hand while the web UI is open show up as a
+warning in the sidebar with an "İndeksi güncelle" button, and `status` lists them too. The answer
+cache can be emptied with "Önbelleği temizle" there or `cache --clear`.
 
 Turkish Wikipedia articles can be added by name or link, with "Vikipedi'den ekle" in the sidebar
 or `add-wiki`. The article is downloaded, converted the same way as the ones in `data/docs/`
@@ -271,6 +286,8 @@ uv run streamlit run app.py                 # web arayüzü
 uv run python main.py chat                  # sohbet, çıkmak için "çık"
 uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de gösterir
+uv run python main.py ask --json "Ani hangi ilde?"   # cevap, kaynaklar ve süreler JSON olarak
+uv run python main.py search "Ani hangi ilde?"   # getirilen parçalar ve eşik, sohbet modeli yok
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # internet gerekir
 uv run python main.py update-wiki --check   # Vikipedi'de değişen maddeler, internet gerekir
@@ -278,11 +295,21 @@ uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
 uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
 uv run python main.py feedback              # web arayüzünde 👎 verilen cevaplar
+uv run python main.py status                # indeks, önbellek, oylar, indekslenmemiş dosyalar
+uv run python main.py docs                  # indeksteki dokümanlar
+uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil
+uv run python main.py cache --clear         # cevap önbelleğini boşalt
 uv run pytest                               # model gerekmez, ~1 sn
 ```
 
 Web arayüzünde kenar çubuğundaki "Sohbeti indir (.md)" sohbeti Markdown dosyası olarak kaydediyor;
-her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor.
+her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor. `chat` içinde
+`kaydet` aynı işi yapıyor (dosyayı seçmek için `kaydet notlar/ani.md`); yukarı ok tuşu da önceki
+oturumlardaki soruları getiriyor (`~/.miras-rag/chat_history` içinde tutuluyor).
+
+`search` aramayı tek başına incelemek için: yalnızca embedding modelini yükleyip sohbet modeline
+gidecek parçaları, benzerliklerini, soruda tanıdığı alan adlarını ve sorunun eşiği geçip
+geçmediğini yazıyor. Kaç parça getirileceği `-k` ile değişiyor.
 
 Her cevabın altında bir de 👍/👎 var. Oylar soru, cevap ve getirilen parçalarla birlikte aynı SQLite
 dosyasına yazılıyor (`ingest --rebuild` silmiyor). `feedback` 👎 verilenleri listeliyor (hepsi için
@@ -298,8 +325,11 @@ Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN
 Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
 `ingest` çalıştırmanız ya da web arayüzünün kenar çubuğundan ("Doküman ekle") yüklemeniz yeterli.
 Yüklenen dosyalar aynı klasöre kaydedilip hemen indeksleniyor, sadece değişen dosyalar yeniden
-işleniyor. Aynı yerdeki "Doküman sil" bir dosyayı `data/docs/`'tan ve indeksten kaldırıyor (yeniden
-gömme gerekmiyor); en az bir doküman kalması gerekiyor.
+işleniyor. Aynı yerdeki "Doküman sil" (ya da `remove-doc`) bir dosyayı `data/docs/`'tan ve indeksten
+kaldırıyor (yeniden gömme gerekmiyor); en az bir doküman kalması gerekiyor. Web arayüzü açıkken elle
+düzenlenen ya da silinen dosyalar kenar çubuğunda "İndeksi güncelle" düğmesiyle birlikte uyarı
+olarak çıkıyor, `status` da bunları listeliyor. Cevap önbelleği oradaki "Önbelleği temizle" ya da
+`cache --clear` ile boşaltılabiliyor.
 
 Türkçe Vikipedi maddeleri adıyla ya da bağlantısıyla da eklenebiliyor: kenar çubuğunda
 "Vikipedi'den ekle" ya da `add-wiki`. Madde indirilip `data/docs/` içindekilerle aynı şekilde
