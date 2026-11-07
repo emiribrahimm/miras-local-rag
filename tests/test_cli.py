@@ -50,3 +50,25 @@ def test_docs_command_lists_indexed_documents(run):
     assert out.splitlines()[:3] == ["Efes  (efes.md, 1 parça)", "     takma adlar: Ephesos, Ephesus",
                                     "Göbeklitepe  (gobeklitepe.md, 2 parça)"]
     assert "     https://example.org/g" in out and out.endswith("2 doküman, 3 parça\n")
+
+
+def test_remove_doc_deletes_file_and_chunks(run, store, settings):
+    code, out, _ = run("remove-doc", "efes.md")
+    assert code == 0 and out == "Silindi: efes.md. Veritabanı: 1 doküman, 2 parça\n"
+    assert not (settings.docs_dir / "efes.md").exists()
+
+
+@pytest.mark.parametrize("name, message", [
+    ("yok.md", "ne indekste"),
+    ("../efes.md", "ne indekste"),
+])
+def test_remove_doc_rejects_unknown_files(run, name, message):
+    code, _, err = run("remove-doc", name)
+    assert code == 1 and message in err
+
+
+def test_last_doc_cannot_be_removed(run, settings):
+    assert run("remove-doc", "efes.md")[0] == 0
+    code, _, err = run("remove-doc", "gobeklitepe.md")
+    assert code == 1 and "En az bir doküman kalmalı." in err
+    assert (settings.docs_dir / "gobeklitepe.md").exists()

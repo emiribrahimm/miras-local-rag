@@ -1,4 +1,5 @@
-"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback, status, docs, cache."""
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, chat, eval, calibrate, feedback,
+status, docs, remove-doc, cache."""
 
 from __future__ import annotations
 
@@ -14,11 +15,15 @@ from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ROOT, SETTINGS, Settings
 from .feedback import eval_candidates
-from .ingest import ingest, pending_changes, save_uploads
+from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import IndexError_, Retriever
 from .store import Store
 from .wiki import WikiError, article, outdated, refreshed
+
+
+class CommandError(RuntimeError):
+    """Kullanıcının düzeltebileceği komut hatası; iz yerine tek satır mesaj basılır."""
 
 
 def _status(message: str) -> None:
@@ -298,6 +303,21 @@ def cmd_docs(args: argparse.Namespace, settings: Settings) -> None:
     print(f"\n{len(docs)} doküman, {sum(d['chunks'] for d in docs)} parça")
 
 
+def cmd_remove_doc(args: argparse.Namespace, settings: Settings) -> None:
+    store = Store(settings.db_path)
+    indexed = {d["filename"] for d in store.documents()}
+    if args.filename not in indexed and not (settings.docs_dir / args.filename).is_file():
+        raise CommandError(f"{args.filename} ne indekste ne de {settings.docs_dir} içinde.")
+    if indexed <= {args.filename}:
+        raise CommandError("En az bir doküman kalmalı.")  # boş indeksle arama yapılamaz
+    try:
+        remove_document(store, settings.docs_dir, args.filename)
+    except ValueError as err:
+        raise CommandError(str(err)) from err
+    docs, chunks = store.counts()
+    print(f"Silindi: {args.filename}. Veritabanı: {docs} doküman, {chunks} parça")
+
+
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
     if args.clear:
@@ -356,6 +376,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("docs", help="İndeksteki dokümanları listele (model çağırmaz)")
     p.set_defaults(func=cmd_docs)
 
+    p = sub.add_parser("remove-doc", help="Dokümanı klasörden ve indeksten sil (model çağırmaz)")
+    p.add_argument("filename", help="Doküman dosyasının adı, ör. efes.md")
+    p.set_defaults(func=cmd_remove_doc)
+
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
     p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")
     p.set_defaults(func=cmd_cache)
@@ -369,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         args.func(args, settings)
-    except (BackendError, IndexError_, FileNotFoundError, WikiError) as err:
+    except (BackendError, IndexError_, FileNotFoundError, WikiError, CommandError) as err:
         print(f"Hata: {err}", file=sys.stderr)
         return 1
     return 0
