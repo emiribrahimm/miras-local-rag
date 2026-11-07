@@ -213,3 +213,13 @@ def test_files_changed_outside_the_app_can_be_indexed(app, settings):
     assert "İndekslendi: ani.md" in app.sidebar.success[0].value
     assert not app.sidebar.warning
     assert "- Ani (1 parça)" in app.sidebar.markdown[1].value and "Efes" not in app.sidebar.markdown[1].value
+
+
+def test_clearing_cache_sends_repeated_question_to_model(app):
+    assert not any(b.label.startswith("Önbelleği temizle") for b in app.sidebar.button)
+    app.chat_input[0].set_value("Efes nerede?").run()
+    next(b for b in app.sidebar.button if b.label == "Önbelleği temizle (1 cevap)").click().run()
+    assert not app.exception
+    assert not any(b.label.startswith("Önbelleği temizle") for b in app.sidebar.button)
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert len(app.fake.chat_calls) == 2

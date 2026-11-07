@@ -176,6 +176,18 @@ def render_delete_result() -> None:
         st.success(f"Silindi: {filename}")
 
 
+def render_cache() -> None:
+    store = Store(SETTINGS.db_path)
+    try:
+        size = store.cache_size()
+        if size and st.button(f"Önbelleği temizle ({size} cevap)",
+                              help="Tekrar sorulan sorular yeniden modele gider; indeks ve oylar kalır."):
+            store.clear_answer_cache()
+            st.rerun()
+    finally:
+        store.close()
+
+
 def record_vote(key: str, turn: int) -> None:
     """Oy değişince çağrılır; oy veritabanına yazılır (geri alınırsa silinir)."""
     question, answer = st.session_state.history[turn]
@@ -238,6 +250,7 @@ with st.sidebar:
                 f"- Parça sayısı: {len(assistant.retriever.chunks)}\n- top_k: {SETTINGS.top_k}, "
                 f"eşik: {SETTINGS.min_similarity}")
     show_all = st.toggle("Getirilen tüm parçaları göster", value=False)
+    render_cache()
     st.subheader("Bilgi tabanı")
     chunk_counts = Counter(c.filename for c in assistant.retriever.chunks)
     titles = {c.filename: c.title for c in assistant.retriever.chunks}
