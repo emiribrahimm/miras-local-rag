@@ -26,6 +26,19 @@ class IngestReport:
     skipped: list[str] = field(default_factory=list)
 
 
+def _fingerprint(raw: str, settings: Settings) -> str:
+    """İçerik ve parçalama ayarlarının özeti; ikisinden biri değişince dosya yeniden gömülür."""
+    return hashlib.sha256(
+        f"{settings.chunk_target_chars}|{settings.chunk_max_chars}|{raw}".encode("utf-8")
+    ).hexdigest()
+
+
+def _doc_files(docs_dir: Path) -> list[Path]:
+    if not docs_dir.is_dir():
+        return []
+    return sorted(p for p in docs_dir.iterdir() if p.suffix.lower() in DOC_SUFFIXES)
+
+
 def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool = False,
            on_progress: Callable[[str], None] = lambda _msg: None) -> IngestReport:
     """Yalnızca değişen dosyaları yeniden işler (içerik özetine göre)."""
@@ -33,7 +46,7 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
     if rebuild or store.get_meta("embed_model") not in (None, backend.embed_model):
         store.clear()
 
-    files = sorted(p for p in settings.docs_dir.iterdir() if p.suffix.lower() in DOC_SUFFIXES)
+    files = _doc_files(settings.docs_dir)
     if not files:
         raise FileNotFoundError(f"{settings.docs_dir} içinde .md/.txt doküman yok.")
 
@@ -45,9 +58,7 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
         except UnicodeDecodeError:
             report.skipped.append(f"{path.name}: UTF-8 olarak okunamadı, atlandı.")
             continue
-        fingerprint = hashlib.sha256(
-            f"{settings.chunk_target_chars}|{settings.chunk_max_chars}|{raw}".encode("utf-8")
-        ).hexdigest()
+        fingerprint = _fingerprint(raw, settings)
         if known.get(path.name) == fingerprint:
             report.unchanged.append(path.name)
             continue
@@ -73,6 +84,38 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
 
     store.set_meta("embed_model", backend.embed_model)
     return report
+
+
+@dataclass
+class PendingChanges:
+    """Doküman klasörüyle indeks arasındaki fark; `ingest` çalışınca kapanır."""
+    changed: list[str]  # yeni ya da içeriği değişmiş dosyalar
+    missing: list[str]  # indekste olup klasörde artık olmayan dosyalar
+
+    def __bool__(self) -> bool:
+        return bool(self.changed or self.missing)
+
+
+def pending_changes(store: Store, settings: Settings) -> PendingChanges:
+    """Klasördeki dosyaları indeksle karşılaştırır; embedding üretmez, model gerektirmez.
+
+    Okunamayan ve parça çıkmayan yeni dosyalar sayılmaz; ingest onları zaten atlıyor.
+    """
+    known = store.fingerprints()
+    files = _doc_files(settings.docs_dir)
+    changed = []
+    for path in files:
+        try:
+            raw = path.read_text(encoding="utf-8-sig")
+        except UnicodeDecodeError:
+            continue
+        if known.get(path.name) == _fingerprint(raw, settings):
+            continue
+        if path.name not in known and not chunk_document(
+                parse_document(raw, path.stem), settings.chunk_target_chars, settings.chunk_max_chars):
+            continue
+        changed.append(path.name)
+    return PendingChanges(changed, sorted(set(known) - {p.name for p in files}))
 
 
 def _valid_doc_name(name: str) -> str | None:

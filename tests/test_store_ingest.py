@@ -262,3 +262,17 @@ def test_unreadable_file_is_skipped_and_keeps_old_chunks(store, backend, setting
     report = ingest(store, backend, settings)
     assert report.skipped == ["efes.md: UTF-8 olarak okunamadı, atlandı."]
     assert report.removed == [] and store.counts() == (2, 3)
+
+
+def test_pending_changes_lists_new_edited_and_missing_files(store, backend, settings):
+    from miras.ingest import pending_changes
+
+    assert not pending_changes(store, settings)
+    (settings.docs_dir / "efes.md").write_text("# Efes\n\nYeni metin.", encoding="utf-8")
+    (settings.docs_dir / "ani.md").write_text("# Ani\n\nKars ilinde.", encoding="utf-8")
+    (settings.docs_dir / "bos.md").write_text("# Boş\n", encoding="utf-8")
+    (settings.docs_dir / "gobeklitepe.md").unlink()
+    pending = pending_changes(store, settings)
+    assert pending.changed == ["ani.md", "efes.md"] and pending.missing == ["gobeklitepe.md"]
+    ingest(store, backend, settings)
+    assert not pending_changes(store, settings)
