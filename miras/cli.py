@@ -8,6 +8,7 @@ import dataclasses
 import json
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -20,6 +21,10 @@ from .pipeline import Answer, Assistant
 from .retrieval import TITLE_BOOST, IndexError_, Retriever
 from .store import Store
 from .wiki import WikiError, article, outdated, refreshed
+
+
+# Sohbette yukarı okla önceki sorulara dönülebilsin; modellerle aynı klasörde durur.
+CHAT_HISTORY = Path.home() / ".miras-rag" / "chat_history"
 
 
 class CommandError(RuntimeError):
@@ -147,23 +152,52 @@ def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
     print(f"(arama {prepared.retrieval_seconds:.2f} sn)")
 
 
+def _chat_history(path: Path) -> Callable[[], None]:
+    """Önceki oturumların sorularını readline geçmişine yükler; kaydeden fonksiyonu döner.
+
+    readline olmayan ortamlarda (Windows) ve dosya yazılamazsa sohbet yine çalışır.
+    """
+    try:
+        import readline
+    except ImportError:
+        return lambda: None
+    try:
+        readline.read_history_file(path)
+    except OSError:
+        pass
+    readline.set_history_length(500)
+
+    def save() -> None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            readline.write_history_file(path)
+        except OSError:
+            pass
+
+    return save
+
+
 def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     print("Miras — Türkiye'nin UNESCO Dünya Mirası alanları asistanı. Çıkmak için 'çık' yazın.")
     print("Alan adı geçmeyen sorular önceki sorunun konusuyla sorulur; sıfırlamak için 'yeni' yazın.")
+    save_history = _chat_history(CHAT_HISTORY)
     last: Answer | None = None
-    while True:
-        try:
-            question = input("\nSoru> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-        if question.lower() in {"çık", "cik", "exit", "quit", "q"}:
-            break
-        if question.lower() == "yeni":
-            last = None
-            continue
-        last = _answer_streaming(assistant, question, args.verbose, last)
+    try:
+        while True:
+            try:
+                question = input("\nSoru> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            if question.lower() in {"çık", "cik", "exit", "quit", "q"}:
+                break
+            if question.lower() == "yeni":
+                last = None
+                continue
+            last = _answer_streaming(assistant, question, args.verbose, last)
+    finally:
+        save_history()
 
 
 def cmd_calibrate(args: argparse.Namespace, settings: Settings) -> None:

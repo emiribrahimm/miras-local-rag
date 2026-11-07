@@ -91,3 +91,23 @@ def test_search_reports_refusal_below_threshold(run):
 def test_search_rejects_bad_k(run):
     code, _, err = run("search", "Efes nerede?", "-k", "0")
     assert code == 1 and "top_k en az 1" in err
+
+
+@pytest.fixture
+def chat(run, monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "CHAT_HISTORY", tmp_path / "gecmis" / "chat_history")
+
+    def chat(*lines: str) -> str:
+        answers = iter(lines)
+        monkeypatch.setattr("builtins.input", lambda _prompt="": next(answers))
+        return run("chat")[1]
+
+    return chat
+
+
+def test_chat_answers_until_quit_and_saves_history(chat, backend, tmp_path):
+    backend.reply = "Efes İzmir'dedir [K1]."
+    out = chat("Efes nerede?", "çık")
+    assert "Efes İzmir'dedir [K1]." in out and len(backend.chat_calls) == 1
+    pytest.importorskip("readline")
+    assert (tmp_path / "gecmis" / "chat_history").exists()
