@@ -62,5 +62,22 @@ class Settings:
     max_output_tokens: int = 400
     seed: int = 42
 
+    def __post_init__(self) -> None:
+        """Anlamsız değerler (top_k=0, eşik 5) aramayı sessizce bozmasın, baştan reddedilsin."""
+        problems = []
+        if self.top_k < 1:
+            problems.append(f"top_k en az 1 olmalı ({self.top_k})")
+        for name in ("min_similarity", "followup_min_similarity"):
+            if not 0 <= getattr(self, name) <= 1:
+                problems.append(f"{name} 0 ile 1 arasında olmalı ({getattr(self, name)})")
+        if self.bm25_weight < 0:
+            problems.append(f"bm25_weight negatif olamaz ({self.bm25_weight})")
+        if self.chat_device not in ("cpu", "gpu"):
+            problems.append(f"chat_device cpu ya da gpu olmalı ({self.chat_device!r})")
+        if not 0 < self.chunk_target_chars <= self.chunk_max_chars:
+            problems.append("chunk_target_chars 0'dan büyük ve chunk_max_chars'tan küçük olmalı")
+        if problems:
+            raise ValueError("Geçersiz ayar: " + "; ".join(problems))
+
 
 SETTINGS = Settings()

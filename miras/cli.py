@@ -303,7 +303,11 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     overrides = {"chat_model": args.model, "chat_device": args.device}
-    settings = dataclasses.replace(SETTINGS, **{k: v for k, v in overrides.items() if v})
+    try:
+        settings = dataclasses.replace(SETTINGS, **{k: v for k, v in overrides.items() if v})
+    except ValueError as err:
+        print(f"Hata: {err}", file=sys.stderr)
+        return 1
     try:
         args.func(args, settings)
     except (BackendError, IndexError_, FileNotFoundError, WikiError) as err:
