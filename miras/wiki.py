@@ -15,7 +15,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from .chunking import parse_document
+from .chunking import front_matter, parse_document
 from .retrieval import _ASCII, _fold
 
 API = "https://tr.wikipedia.org/w/api.php"
@@ -167,11 +167,10 @@ def local_revisions(docs_dir: Path) -> list[WikiDoc]:
     """Kaynağı tr.wikipedia.org olan dokümanlar ve üst bilgilerindeki revizyon numaraları."""
     docs: list[WikiDoc] = []
     for path in sorted(docs_dir.glob("*.md")):
-        match = re.match(r"---\n(.*?)\n---\n", path.read_text(encoding="utf-8"), flags=re.DOTALL)
-        if not match:
-            continue
-        meta = {k.strip(): v.strip() for k, _, v in
-                (line.partition(":") for line in match.group(1).splitlines())}
+        try:
+            meta, _ = front_matter(path.read_text(encoding="utf-8-sig"))
+        except UnicodeDecodeError:
+            continue  # ingest de bu dosyayı atlıyor
         source = meta.get("source", "")
         try:
             title = parse_query(source) if re.match(r"https?://", source) else None

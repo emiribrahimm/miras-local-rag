@@ -121,6 +121,12 @@ def test_local_revisions_reads_wikipedia_headers_only(tmp_path):
         ("eski.md", "Eski", 0), ("nemrut-dagi.md", "Nemrut Dağı", 111)]
 
 
+def test_local_revisions_reads_crlf_headers_and_skips_unreadable_files(tmp_path):
+    (tmp_path / "ani.md").write_bytes(wiki_doc("Ani", 7).replace("\n", "\r\n").encode("utf-8"))
+    (tmp_path / "bozuk.md").write_bytes(wiki_doc("Bozuk", 8).encode("iso8859_9") + b"\xfe")
+    assert [(d.filename, d.revision) for d in local_revisions(tmp_path)] == [("ani.md", 7)]
+
+
 def test_latest_revisions_maps_back_normalized_and_redirected_titles(monkeypatch):
     calls = []
 

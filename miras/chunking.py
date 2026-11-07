@@ -26,18 +26,23 @@ class Chunk:
         return f"{self.section}\n{self.text}"
 
 
-def parse_document(raw: str, fallback_title: str) -> Document:
-    """Baştaki '---' ile çevrili üst bilgiyi (title, source, aliases) ayırır."""
+def front_matter(raw: str) -> tuple[dict[str, str], str]:
+    """Baştaki '---' ile çevrili üst bilgi alanları ve geri kalan metin."""
     # Windows'ta kaydedilen dosyalarda üst bilgi "\r\n" yüzünden eşleşmiyordu.
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-    meta: dict[str, str] = {}
-    body = raw
     match = re.match(r"---\n(.*?)\n---\n", raw, flags=re.DOTALL)
-    if match:
-        body = raw[match.end():]
-        for line in match.group(1).splitlines():
-            key, _, value = line.partition(":")
-            meta[key.strip()] = value.strip()
+    if not match:
+        return {}, raw
+    meta = {}
+    for line in match.group(1).splitlines():
+        key, _, value = line.partition(":")
+        meta[key.strip()] = value.strip()
+    return meta, raw[match.end():]
+
+
+def parse_document(raw: str, fallback_title: str) -> Document:
+    """Baştaki '---' ile çevrili üst bilgiyi (title, source, aliases) ayırır."""
+    meta, body = front_matter(raw)
     # Üst bilgi yoksa başlık ilk '# ...' satırından, o da yoksa dosya adından alınır.
     h1 = re.search(r"^#\s+(.+)$", body, flags=re.MULTILINE)
     title = meta.get("title") or (h1.group(1).strip() if h1 else fallback_title)
