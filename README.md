@@ -1,5 +1,7 @@
 # Miras
 
+[![tests](https://github.com/emiribrahimm/miras-local-rag/actions/workflows/tests.yml/badge.svg)](https://github.com/emiribrahimm/miras-local-rag/actions/workflows/tests.yml)
+
 A small RAG assistant that answers Turkish questions about Turkey's UNESCO World Heritage sites,
 running entirely on your own machine with [Microsoft Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/).
 No API keys, no network calls once the models are downloaded.
@@ -136,6 +138,9 @@ for everything), and `feedback --export reports/feedback-candidates.json` writes
 `questions.json` format so they can be turned into eval questions. The vote doesn't say whether
 the right answer was a different one or a refusal, so `type` and `expected` are left to fill in;
 questions that carried a topic are marked with `carried` and belong in `followups.json`.
+
+The tests use a fake backend instead of the models, so they also run on GitHub Actions on every
+push (Python 3.12 and 3.13, without the Foundry Local SDK).
 
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
@@ -360,6 +365,9 @@ dosyasına yazılıyor (`ingest --rebuild` silmiyor). `feedback` 👎 verilenler
 biçiminde yazıyor; böylece test setine soru olarak eklenebiliyorlar. Oy, doğru davranışın başka bir
 cevap mı yoksa reddetmek mi olduğunu söylemediği için `type` ve `expected` elle dolduruluyor; konu
 taşınmış sorular `carried` alanıyla işaretli, onların yeri `followups.json`.
+
+Testler modeller yerine sahte bir arka uç kullandığı için her push'ta GitHub Actions'ta da
+çalışıyor (Python 3.12 ve 3.13, Foundry Local SDK olmadan).
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
 `MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
