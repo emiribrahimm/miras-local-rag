@@ -1,10 +1,11 @@
-"""Sohbeti kaynaklarıyla birlikte Markdown metnine çevirir (web arayüzündeki indirme düğmesi)."""
+"""Cevapları ve sohbeti dışa aktarır: Markdown (okumak için) ve JSON (betikler için)."""
 
 from __future__ import annotations
 
 from datetime import datetime
 
 from .config import Settings
+from .feedback import answer_sources
 from .pipeline import Answer
 
 
@@ -57,3 +58,15 @@ def conversation_markdown(history: list[tuple[str, Answer]], settings: Settings,
                   "[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) "
                   "lisansıyla paylaşılır."]
     return "\n".join(parts) + "\n"
+
+
+def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
+    """Betikler için cevap: metin, reddetme sebebi, parçalar (destek cümleleriyle) ve süreler."""
+    sources = [{"label": f"K{i + 1}", **source, "source_url": answer.hits[i].chunk.source_url,
+                "support": answer.support.get(i, [])}
+               for i, source in enumerate(answer_sources(answer))]
+    return {"question": question, "answer": answer.text, "refused": answer.refused,
+            "refusal_reason": answer.refusal_reason, "carried": list(answer.carried),
+            "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
+            "retrieval_seconds": round(answer.retrieval_seconds, 3),
+            "generation_seconds": round(answer.generation_seconds, 3)}

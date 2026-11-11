@@ -44,3 +44,15 @@ def test_cached_answer_is_marked(assistant, backend, settings, store):
     assistant.ask("Efes nerede?")
     answer = assistant.ask("Efes nerede?")
     assert "_Cevap önbellekten geldi._" in conversation_markdown([("Efes nerede?", answer)], settings, NOW)
+
+
+def test_answer_json_carries_topic_and_empty_question_has_no_sources(assistant, backend, settings):
+    from miras.export import answer_json
+
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    data = answer_json("Peki ne zaman listeye girdi?", assistant.ask("Peki ne zaman listeye girdi?", first),
+                       settings)
+    assert data["carried"] == ["Göbeklitepe"] and data["question"] == "Peki ne zaman listeye girdi?"
+    assert data["sources"][0]["label"] == "K1" and data["chat_model"] == settings.chat_model
+    empty = answer_json("", assistant.ask(""), settings)
+    assert empty["refusal_reason"] == "empty" and empty["sources"] == []
