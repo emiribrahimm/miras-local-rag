@@ -107,8 +107,12 @@ class Assistant:
             prepared.refusal_reason = "low_similarity"
         return prepared
 
-    def generate(self, prepared: Prepared) -> Iterator[str]:
-        """Cevabı parça parça üretir (akış). Reddedilen sorularda sabit metni verir."""
+    def generate(self, prepared: Prepared, refresh: bool = False) -> Iterator[str]:
+        """Cevabı parça parça üretir (akış). Reddedilen sorularda sabit metni verir.
+
+        `refresh` verilirse önbellekteki cevap okunmaz; model yeniden çağrılır ve yeni cevap
+        eskisinin yerine yazılır (önbellekte kalmış kötü bir cevabı düzeltmek için).
+        """
         if prepared.refusal_reason == "empty":
             yield EMPTY_QUESTION_MESSAGE
         elif prepared.refusal_reason == "low_similarity":
@@ -117,7 +121,7 @@ class Assistant:
             messages = build_messages(prepared.question, prepared.hits)
             cache = self.cache if self.settings.answer_cache else None
             key = self._cache_key(messages) if cache else ""
-            cached = cache.cached_answer(key) if cache else None
+            cached = cache.cached_answer(key) if cache and not refresh else None
             if cached is not None:
                 prepared.cached = True
                 yield cached
@@ -170,8 +174,8 @@ class Assistant:
                 titles = cited_titles
         return tuple(sorted(titles))
 
-    def ask(self, question: str, previous: Answer | None = None) -> Answer:
+    def ask(self, question: str, previous: Answer | None = None, refresh: bool = False) -> Answer:
         prepared = self.prepare(question, previous)
         started = time.perf_counter()
-        raw = "".join(self.generate(prepared))
+        raw = "".join(self.generate(prepared, refresh))
         return self.finalize(prepared, raw, time.perf_counter() - started)

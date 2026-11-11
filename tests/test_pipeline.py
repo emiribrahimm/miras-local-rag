@@ -194,3 +194,14 @@ def test_interrupted_stream_is_not_cached(cached, backend, store):
     prepared = cached.prepare("Efes nerede?")
     next(cached.generate(prepared))  # akış yarıda bırakılıyor
     assert store.conn.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0] == 0
+
+
+def test_refresh_skips_cache_and_replaces_stored_answer(cached, backend, store):
+    backend.reply = "Efes Ankara'dadır [K1]."
+    cached.ask("Efes nerede?")
+    backend.reply = "Efes İzmir'dedir [K1]."
+    fresh = cached.ask("Efes nerede?", refresh=True)
+    assert not fresh.cached and fresh.text == "Efes İzmir'dedir [K1]."
+    again = cached.ask("Efes nerede?")
+    assert again.cached and again.text == "Efes İzmir'dedir [K1]."
+    assert len(backend.chat_calls) == 2 and store.cache_size() == 1
