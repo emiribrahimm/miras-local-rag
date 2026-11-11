@@ -100,6 +100,8 @@ uv run python main.py update-wiki --check   # which articles changed on Wikipedi
 uv run python main.py calibrate             # re-measure the similarity threshold
 uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
+uv run python main.py eval --split dev      # only one half (or --ids a01,f03 for a few questions)
+uv run python main.py compare-reports reports/old.json reports/eval-qwen2.5-7b-cpu.json
 uv run python main.py feedback              # thumbs down answers from the web UI
 uv run python main.py status                # index, cache, votes, files not indexed yet
 uv run python main.py docs                  # what's in the index
@@ -201,6 +203,13 @@ the main set and adds a section to the report that also shows where the right do
 ranked if the follow-up had been asked on its own. The report above predates it, so rerun `eval`
 to get those numbers, including how many off-topic follow-ups were refused without calling the
 model.
+
+The report also has a table per document (answerable questions only: correct, refused, cited the
+right document), since a total like 25/26 doesn't say which article the misses come from. While
+tuning, `eval --split dev` keeps the test questions out of sight and `eval --ids a07,f12` reruns
+just the ones being worked on; both write to a separate report (`...-dev`, `...-secili`) so the
+full one isn't overwritten. `compare-reports old.json new.json` lists the settings that changed,
+the scores before and after, and which questions got fixed or broken in between.
 
 ## Limitations
 
@@ -315,6 +324,8 @@ uv run python main.py update-wiki --check   # Vikipedi'de değişen maddeler, in
 uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
 uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
+uv run python main.py eval --split dev      # yalnızca bir yarısı (birkaç soru için --ids a01,f03)
+uv run python main.py compare-reports reports/eski.json reports/eval-qwen2.5-7b-cpu.json
 uv run python main.py feedback              # web arayüzünde 👎 verilen cevaplar
 uv run python main.py status                # indeks, önbellek, oylar, indekslenmemiş dosyalar
 uv run python main.py docs                  # indeksteki dokümanlar
@@ -414,6 +425,13 @@ sonra çalıştırıp rapora ayrı bir bölüm ekliyor; takip sorusu tek başın
 kaçıncı sırada geleceği de orada. Yukarıdaki rapor bu setten önce üretildi, rakamlar için `eval`
 yeniden çalıştırılmalı. Konu dışı takip sorularından kaçının model çağrılmadan reddedildiği de
 raporda.
+
+Raporda doküman bazında bir tablo da var (yalnızca cevaplanabilir sorular: doğru, reddedilen, doğru
+dokümana atıf); 25/26 gibi bir toplam, kaçırılan sorunun hangi maddeden geldiğini söylemiyor. Ayar
+yaparken `eval --split dev` test sorularını görmeden çalıştırıyor, `eval --ids a07,f12` de yalnızca
+üzerinde çalışılan soruları yeniden soruyor; ikisi de ayrı bir rapora yazıyor (`...-dev`,
+`...-secili`), tam rapor ezilmiyor. `compare-reports eski.json yeni.json` değişen ayarları, önceki
+ve sonraki skorları ve arada düzelen ya da bozulan soruları listeliyor.
 
 ### Eksikler
 
