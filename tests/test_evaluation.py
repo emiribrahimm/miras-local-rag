@@ -182,3 +182,28 @@ def test_report_breaks_answerable_questions_down_by_doc(assistant, backend, tmp_
     write_report(tmp_path / "r", header, retrieval_summary([]), summary, [])
     md = (tmp_path / "r.md").read_text(encoding="utf-8")
     assert "| efes.md | 0/1 | 0 | 1 |" in md and "| gobeklitepe.md | 1/1 | 0 | 1 |" in md
+
+
+def _report(passed: dict[str, bool], **config) -> dict:
+    rows = [{"id": i, "question": f"soru {i}", "answer": "cevap", "passed": ok}
+            for i, ok in passed.items() if i.startswith("a")]
+    followups = [{"id": i, "turns": ["ilk", "ikinci"], "answer": "cevap", "passed": ok}
+                 for i, ok in passed.items() if i.startswith("f")]
+
+    def overall(subset):
+        return {"passed": sum(r["passed"] for r in subset), "total": len(subset)}
+    return {"config": {"top_k": 4, **config}, "answers": {"overall": overall(rows)}, "rows": rows,
+            "followups": {"summary": {"overall": overall(followups)}, "rows": followups}}
+
+
+def test_compare_reports_lists_fixed_and_broken_questions():
+    from miras.evaluation import compare_reports
+
+    old = _report({"a01": True, "a02": False, "a03": True, "f01": False}, bm25_weight=0.0)
+    new = _report({"a01": False, "a02": True, "a04": True, "f01": True}, bm25_weight=0.1)
+    diff = compare_reports(old, new)
+    assert diff["config"] == {"bm25_weight": (0.0, 0.1)}
+    assert [r["id"] for r in diff["fixed"]] == ["a02", "f01"]
+    assert [r["id"] for r in diff["broken"]] == ["a01"]
+    assert diff["only_old"] == ["a03"] and diff["only_new"] == ["a04"]
+    assert diff["answers"] == ({"passed": 2, "total": 3}, {"passed": 2, "total": 3})

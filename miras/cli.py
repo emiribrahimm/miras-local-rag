@@ -1,5 +1,5 @@
 """Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, search, chat, eval, calibrate, feedback,
-status, docs, remove-doc, cache."""
+status, docs, remove-doc, cache, compare-reports."""
 
 from __future__ import annotations
 
@@ -357,6 +357,34 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
         print(f"Takip soruları: {followups['overall']['passed']}/{followups['overall']['total']}")
 
 
+def cmd_compare_reports(args: argparse.Namespace, settings: Settings) -> None:
+    try:
+        old, new = (json.loads(path.read_text(encoding="utf-8")) for path in (args.old, args.new))
+        diff = evaluation.compare_reports(old, new)
+    except (OSError, ValueError, KeyError) as err:
+        raise CommandError(f"Rapor okunamadı: {err}") from err
+
+    def frac(d: dict | None) -> str:
+        return f"{d['passed']}/{d['total']}" if d else "-"
+
+    for key, (before, after) in diff["config"].items():
+        print(f"  {key}: {before} -> {after}")
+    print(f"Genel: {frac(diff['answers'][0])} -> {frac(diff['answers'][1])}")
+    if any(diff["followups"]):
+        print(f"Takip soruları: {frac(diff['followups'][0])} -> {frac(diff['followups'][1])}")
+    for title, rows in (("Düzelen", diff["fixed"]), ("Bozulan", diff["broken"])):
+        if rows:
+            print(f"\n{title} ({len(rows)}):")
+        for row in rows:
+            question = row.get("question") or " → ".join(row.get("turns", []))
+            print(f"  {row['id']} {question}\n     -> {row['answer'][:160]}")
+    if not diff["fixed"] and not diff["broken"]:
+        print("\nOrtak sorularda sonucu değişen yok.")
+    if diff["only_old"] or diff["only_new"]:
+        print(f"\nYalnızca eskide: {', '.join(diff['only_old']) or '-'}; "
+              f"yalnızca yenide: {', '.join(diff['only_new']) or '-'}")
+
+
 def cmd_feedback(args: argparse.Namespace, settings: Settings) -> None:
     rows = Store(settings.db_path).feedback_rows()
     up = sum(r["rating"] > 0 for r in rows)
@@ -495,6 +523,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ids", metavar="ID,ID",
                    help="Yalnızca bu sorular, ör. a01,f03 (ana set ve takip seti; rapor adına -secili eklenir)")
     p.set_defaults(func=cmd_eval)
+
+    p = sub.add_parser("compare-reports", help="İki eval raporunu karşılaştır (model çağırmaz)")
+    p.add_argument("old", type=Path, help="Önceki rapor (.json)")
+    p.add_argument("new", type=Path, help="Yeni rapor (.json)")
+    p.set_defaults(func=cmd_compare_reports)
 
     p = sub.add_parser("feedback", help="Web arayüzünde verilen oyları listele (model çağırmaz)")
     p.add_argument("--all", action="store_true", help="Beğenilen cevapları da göster")

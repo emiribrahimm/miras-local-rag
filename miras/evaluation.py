@@ -343,6 +343,35 @@ def followup_summary(rows: list[FollowupRow]) -> dict:
         "answerable_gated_standalone": sum(r.standalone_gated for r in answerable),
     }
 
+def compare_reports(old: dict, new: dict) -> dict:
+    """İki `eval` JSON raporu arasındaki fark: ayar değişiklikleri, skorlar ve sonucu değişen sorular.
+
+    Takip soruları da karşılaştırılır; kimlikler (a01, f03) iki sette çakışmıyor.
+    """
+    def results(report: dict) -> dict[str, dict]:
+        rows = report["rows"] + report.get("followups", {}).get("rows", [])
+        return {r["id"]: r for r in rows}
+
+    def score(report: dict, part: str) -> dict | None:
+        if part == "followups":
+            return report["followups"]["summary"]["overall"] if "followups" in report else None
+        return report["answers"]["overall"]
+
+    before, after = results(old), results(new)
+    common = [i for i in after if i in before]
+    keys = sorted(set(old["config"]) | set(new["config"]))
+    return {
+        "config": {k: (old["config"].get(k), new["config"].get(k)) for k in keys
+                   if old["config"].get(k) != new["config"].get(k)},
+        "answers": (score(old, "answers"), score(new, "answers")),
+        "followups": (score(old, "followups"), score(new, "followups")),
+        "fixed": [after[i] for i in common if after[i]["passed"] and not before[i]["passed"]],
+        "broken": [after[i] for i in common if before[i]["passed"] and not after[i]["passed"]],
+        "only_old": sorted(set(before) - set(after)),
+        "only_new": sorted(set(after) - set(before)),
+    }
+
+
 def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
                  rows: list[AnswerRow], followups: dict | None = None,
                  followup_rows: list[FollowupRow] = ()) -> None:

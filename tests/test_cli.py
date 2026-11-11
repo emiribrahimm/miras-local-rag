@@ -208,3 +208,19 @@ def test_eval_ids_only_follow_up_and_unknown_ids(run, eval_root):
     assert run("eval", "--ids", "f01")[0] == 0
     code, _, err = run("eval", "--ids", "a01,zz9")
     assert code == 1 and "Bilinmeyen soru: zz9" in err
+
+
+def test_compare_reports_command(run, tmp_path):
+    import json
+
+    def report(passed: bool, weight: float) -> dict:
+        return {"config": {"bm25_weight": weight}, "answers": {"overall": {"passed": int(passed), "total": 1}},
+                "rows": [{"id": "a01", "question": "Efes nerede?", "answer": "İzmir", "passed": passed}]}
+
+    (tmp_path / "eski.json").write_text(json.dumps(report(False, 0.0)), encoding="utf-8")
+    (tmp_path / "yeni.json").write_text(json.dumps(report(True, 0.1)), encoding="utf-8")
+    code, out, _ = run("compare-reports", str(tmp_path / "eski.json"), str(tmp_path / "yeni.json"))
+    assert code == 0 and "bm25_weight: 0.0 -> 0.1" in out and "Genel: 0/1 -> 1/1" in out
+    assert "Düzelen (1):\n  a01 Efes nerede?" in out and "Takip soruları" not in out
+    code, _, err = run("compare-reports", str(tmp_path / "yok.json"), str(tmp_path / "yeni.json"))
+    assert code == 1 and "Rapor okunamadı" in err
