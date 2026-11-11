@@ -1,11 +1,12 @@
 """Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, ask-batch, search, chat, eval,
-calibrate, feedback, status, docs, remove-doc, cache, compare-reports."""
+calibrate, feedback, status, config, docs, remove-doc, cache, compare-reports."""
 
 from __future__ import annotations
 
 import argparse
 import dataclasses
 import json
+import os
 import sys
 import time
 from collections.abc import Callable
@@ -14,7 +15,7 @@ from pathlib import Path
 
 from . import evaluation
 from .backends import BackendError, FoundryBackend
-from .config import ROOT, SETTINGS, Settings
+from .config import ENV_FIELDS, ROOT, SETTINGS, Settings, env_name
 from .export import answer_json, conversation_markdown
 from .feedback import eval_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
@@ -479,6 +480,21 @@ def cmd_remove_doc(args: argparse.Namespace, settings: Settings) -> None:
     print(f"Silindi: {args.filename}. Veritabanı: {docs} doküman, {chunks} parça")
 
 
+def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
+    """Geçerli ayarlar ve nereden geldikleri (config.py, MIRAS_* ya da komut satırı)."""
+    for field in dataclasses.fields(settings):
+        value = getattr(settings, field.name)
+        if value != getattr(SETTINGS, field.name):
+            origin = "komut satırı"
+        elif field.name in ENV_FIELDS and env_name(field.name) in os.environ:
+            origin = f"{env_name(field.name)} ile ezildi"
+        elif field.name in ENV_FIELDS:
+            origin = f"varsayılan ({env_name(field.name)})"
+        else:
+            origin = "varsayılan (yalnızca config.py)"
+        print(f"{field.name:<24} {str(value):<28} {origin}")
+
+
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
     if args.clear:
@@ -564,6 +580,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("remove-doc", help="Dokümanı klasörden ve indeksten sil (model çağırmaz)")
     p.add_argument("filename", help="Doküman dosyasının adı, ör. efes.md")
     p.set_defaults(func=cmd_remove_doc)
+
+    p = sub.add_parser("config", help="Geçerli ayarları ve nereden geldiklerini göster")
+    p.set_defaults(func=cmd_config)
 
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
     p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")

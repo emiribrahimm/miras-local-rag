@@ -250,3 +250,13 @@ def test_ask_batch_reads_stdin_and_rejects_empty_files(run, monkeypatch, tmp_pat
     (tmp_path / "bos.txt").write_text("# sadece yorum\n", encoding="utf-8")
     code, _, err = run("ask-batch", str(tmp_path / "bos.txt"))
     assert code == 1 and "Dosyada soru yok" in err
+
+
+def test_config_shows_where_each_setting_comes_from(run, monkeypatch):
+    monkeypatch.setenv("MIRAS_TOP_K", "2")
+    monkeypatch.delenv("MIRAS_CHAT_DEVICE", raising=False)
+    lines = {line.split()[0]: line for line in run("--model", "baska-model", "config")[1].splitlines()}
+    assert "baska-model" in lines["chat_model"] and lines["chat_model"].endswith("komut satırı")
+    assert lines["top_k"].endswith("MIRAS_TOP_K ile ezildi")
+    assert lines["chat_device"].endswith("varsayılan (MIRAS_CHAT_DEVICE)")
+    assert lines["temperature"].endswith("varsayılan (yalnızca config.py)")

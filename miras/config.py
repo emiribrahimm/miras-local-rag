@@ -80,4 +80,13 @@ class Settings:
             raise ValueError("Geçersiz ayar: " + "; ".join(problems))
 
 
+# MIRAS_<AD> ortam değişkeniyle ezilebilen alanlar; geri kalanı yalnızca bu dosyadan değişir.
+ENV_FIELDS = ("docs_dir", "db_path", "chat_model", "embed_model", "chat_device", "top_k",
+              "min_similarity", "bm25_weight", "followup_min_similarity", "answer_cache")
+
+
+def env_name(field: str) -> str:
+    return f"MIRAS_{field.upper()}"
+
+
 SETTINGS = Settings()

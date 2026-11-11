@@ -34,3 +34,15 @@ def test_invalid_settings_are_rejected(override, message):
 
 def test_default_settings_are_valid():
     assert dataclasses.replace(SETTINGS, top_k=1, min_similarity=0.0, bm25_weight=0.5).top_k == 1
+
+
+def test_env_fields_match_the_variables_read_in_config():
+    from pathlib import Path
+
+    import miras.config
+    from miras.config import ENV_FIELDS
+
+    source = Path(miras.config.__file__).read_text(encoding="utf-8")
+    names = {f.name for f in dataclasses.fields(SETTINGS)}
+    for field in ENV_FIELDS:
+        assert field in names and f'("{field.upper()}"' in source
