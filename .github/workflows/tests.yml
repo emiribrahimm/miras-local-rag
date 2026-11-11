@@ -1,0 +1,25 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      # Testler FakeBackend kullanıyor; Foundry Local SDK ve modeller gerekmiyor.
+      - name: Install
+        run: grep -v foundry-local-sdk requirements.txt > /tmp/requirements-ci.txt && pip install -r /tmp/requirements-ci.txt
+      - name: Test
+        run: python -m pytest -q
