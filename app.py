@@ -198,6 +198,21 @@ def record_vote(key: str, turn: int) -> None:
         store.close()
 
 
+def regenerate_last() -> None:
+    """Son turu geçmişten çıkarır; aynı soru aşağıda önbelleğe bakılmadan yeniden sorulur."""
+    question, _ = st.session_state.history.pop()
+    versions = st.session_state.setdefault("versions", {})
+    turn = len(st.session_state.history)
+    # Yeni cevabın oyu ayrı bir satıra yazılsın; eski cevaba verilen 👎 kaybolmasın.
+    versions[turn] = versions.get(turn, 0) + 1
+    st.session_state.regenerate = question
+
+
+def vote_key(session_id: str, turn: int) -> str:
+    version = st.session_state.get("versions", {}).get(turn, 0)
+    return f"vote-{session_id}-{turn}" + (f"-{version}" if version else "")
+
+
 def mark(sentence: str) -> str:
     # Köşeli parantez Streamlit'in renk sözdizimini bozar; o durumda kalın yazı yeterli.
     return f"**{sentence}**" if "[" in sentence or "]" in sentence else f":orange-background[{sentence}]"
@@ -284,6 +299,7 @@ with st.sidebar:
     if st.button("Sohbeti temizle"):
         st.session_state.history = []
         st.session_state.pop("session_id", None)  # yeni sohbetin oyları eskilerle karışmasın
+        st.session_state.pop("versions", None)
     turns = st.session_state.get("history", [])
     now = datetime.now()
     st.download_button("Sohbeti indir (.md)", conversation_markdown(turns, SETTINGS, now) if turns else "",
@@ -298,10 +314,16 @@ for turn, (question, past) in enumerate(history):
         st.write(past.text)
         render_sources(past, show_all)
         if past.refusal_reason != "empty":
-            key = f"vote-{session_id}-{turn}"
+            key = vote_key(session_id, turn)
             st.feedback("thumbs", key=key, on_change=record_vote, args=(key, turn))
+        # Model çağrılan son cevap önbellekte kalmış olabilir; yeniden üretmek modeli tekrar çağırır.
+        if turn == len(history) - 1 and past.refusal_reason in (None, "model"):
+            st.button("Yeniden üret", key=f"regenerate-{turn}", on_click=regenerate_last,
+                      help="Önbelleğe bakmadan modeli yeniden çağırır ve önbelleği günceller.")
 
-question = st.chat_input("Bir soru sorun...") or clicked
+typed = st.chat_input("Bir soru sorun...")
+regenerated = st.session_state.pop("regenerate", None)
+question = regenerated or typed or clicked
 if question:
     st.chat_message("user").write(question)
     with st.chat_message("assistant"):
@@ -310,7 +332,7 @@ if question:
                 # Son cevabın konusu, alan adı geçmeyen takip sorularına taşınır.
                 prepared = assistant.prepare(question, history[-1][1] if history else None)
             started = time.perf_counter()
-            raw = st.write_stream(assistant.generate(prepared))
+            raw = st.write_stream(assistant.generate(prepared, refresh=bool(regenerated)))
             answer = assistant.finalize(prepared, raw, time.perf_counter() - started)
         except BackendError as err:
             st.error(f"{err}")

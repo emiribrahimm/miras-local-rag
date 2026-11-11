@@ -223,3 +223,27 @@ def test_clearing_cache_sends_repeated_question_to_model(app):
     assert not any(b.label.startswith("Önbelleği temizle") for b in app.sidebar.button)
     app.chat_input[0].set_value("Efes nerede?").run()
     assert len(app.fake.chat_calls) == 2
+
+
+def test_last_answer_can_be_regenerated_past_the_cache(app, settings):
+    from miras.store import Store
+
+    app.fake.reply = "Efes Ankara'dadır [K1]."
+    app.chat_input[0].set_value("Efes nerede?").run()
+    app.feedback[0].set_value(0).run()
+    app.fake.reply = "Efes İzmir'dedir [K1]."
+    next(b for b in app.button if b.label == "Yeniden üret").click().run()
+    assert not app.exception
+    assert len(app.chat_message) == 2 and len(app.fake.chat_calls) == 2
+    assert app.chat_message[1].markdown[0].value == "Efes İzmir'dedir [K1]."
+    assert app.feedback[0].value is None
+    # Eski cevabın oyu durur, yeni cevap önbellekte eskisinin yerini alır.
+    assert [r["answer"] for r in Store(settings.db_path).feedback_rows()] == ["Efes Ankara'dadır [K1]."]
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert app.chat_message[3].markdown[0].value == "Efes İzmir'dedir [K1]."
+    assert len(app.fake.chat_calls) == 2
+
+
+def test_refused_answer_has_no_regenerate_button(app):
+    app.chat_input[0].set_value("Pizza hamuru tarifi nedir?").run()
+    assert not any(b.label == "Yeniden üret" for b in app.button)
