@@ -92,6 +92,8 @@ uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # also prints chunks and timings
 uv run python main.py ask --json "Ani hangi ilde?"   # answer, sources and timings as JSON
 uv run python main.py search "Ani hangi ilde?"   # retrieved chunks and the gate, no chat model
+uv run python main.py ask --refresh "Ani hangi ilde?"   # skip the cached answer, ask the model again
+uv run python main.py ask-batch sorular.txt --out cevaplar.jsonl   # one question per line
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # needs internet
 uv run python main.py update-wiki --check   # which articles changed on Wikipedia, needs internet
@@ -103,13 +105,24 @@ uv run python main.py status                # index, cache, votes, files not ind
 uv run python main.py docs                  # what's in the index
 uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index
 uv run python main.py cache --clear         # empty the answer cache
+uv run python main.py config                # effective settings and where each one comes from
 uv run pytest                               # no models needed, ~1s
 ```
 
 In the web UI, "Sohbeti indir (.md)" in the sidebar saves the conversation as a Markdown file,
-with the cited chunks and their Wikipedia links under each answer. In `chat`, `kaydet` does the
-same (`kaydet notlar/ani.md` to pick the file), and the up arrow brings back questions from
-earlier sessions (kept in `~/.miras-rag/chat_history`).
+with the cited chunks and their Wikipedia links under each answer, and "Sohbeti indir (.json)"
+saves the same turns with similarity scores and supporting sentences. In `chat`, `kaydet` does the
+Markdown version (`kaydet notlar/ani.md` to pick the file), `kaynak` prints the full chunks behind
+the last answer (`kaynak K2` for one of them), and the up arrow brings back questions from earlier
+sessions (kept in `~/.miras-rag/chat_history`).
+
+Since answers are cached, a bad one would keep coming back. "Yeniden üret" under the last answer
+in the web UI (or `ask --refresh`) asks the model again and replaces the cached answer; a vote
+given to the old answer is kept separately.
+
+`ask-batch` asks every line of a file as a separate question (empty lines and lines starting with
+`#` are skipped, `-` reads from stdin) and writes one JSON object per answer, in the same shape as
+`ask --json`. Questions don't carry topics from one line to the next.
 
 `search` is for looking at retrieval on its own: it loads only the embedding model and prints the
 chunks that would go to the chat model, their similarity, which site names it spotted in the
@@ -139,7 +152,9 @@ right away. Only changed files get re-embedded. "Doküman sil" in the same sideb
 `remove-doc`) removes a file from `data/docs/` and the index (nothing to re-embed), as long as at
 least one document is left. Files edited or deleted by hand while the web UI is open show up as a
 warning in the sidebar with an "İndeksi güncelle" button, and `status` lists them too. The answer
-cache can be emptied with "Önbelleği temizle" there or `cache --clear`.
+cache can be emptied with "Önbelleği temizle" there or `cache --clear`. "Dokümanı incele" shows
+the chunks a document was split into, with their heading paths, and the web UI shows a progress
+bar while new chunks are being embedded.
 
 Turkish Wikipedia articles can be added by name or link, with "Vikipedi'den ekle" in the sidebar
 or `add-wiki`. The article is downloaded, converted the same way as the ones in `data/docs/`
@@ -292,6 +307,8 @@ uv run python main.py ask "Selimiye Camii'nin mimarı kimdir?"
 uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de gösterir
 uv run python main.py ask --json "Ani hangi ilde?"   # cevap, kaynaklar ve süreler JSON olarak
 uv run python main.py search "Ani hangi ilde?"   # getirilen parçalar ve eşik, sohbet modeli yok
+uv run python main.py ask --refresh "Ani hangi ilde?"   # önbelleği atla, modele yeniden sor
+uv run python main.py ask-batch sorular.txt --out cevaplar.jsonl   # satır başına bir soru
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # internet gerekir
 uv run python main.py update-wiki --check   # Vikipedi'de değişen maddeler, internet gerekir
@@ -303,13 +320,24 @@ uv run python main.py status                # indeks, önbellek, oylar, indeksle
 uv run python main.py docs                  # indeksteki dokümanlar
 uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil
 uv run python main.py cache --clear         # cevap önbelleğini boşalt
+uv run python main.py config                # geçerli ayarlar ve her birinin nereden geldiği
 uv run pytest                               # model gerekmez, ~1 sn
 ```
 
 Web arayüzünde kenar çubuğundaki "Sohbeti indir (.md)" sohbeti Markdown dosyası olarak kaydediyor;
-her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor. `chat` içinde
-`kaydet` aynı işi yapıyor (dosyayı seçmek için `kaydet notlar/ani.md`); yukarı ok tuşu da önceki
-oturumlardaki soruları getiriyor (`~/.miras-rag/chat_history` içinde tutuluyor).
+her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor. "Sohbeti indir
+(.json)" aynı turları benzerlik skorları ve destekleyen cümlelerle birlikte yazıyor. `chat` içinde
+`kaydet` Markdown halini kaydediyor (dosyayı seçmek için `kaydet notlar/ani.md`), `kaynak` son
+cevabın dayandığı parçaları tam metinle basıyor (tek bir parça için `kaynak K2`); yukarı ok tuşu da
+önceki oturumlardaki soruları getiriyor (`~/.miras-rag/chat_history` içinde tutuluyor).
+
+Cevaplar önbelleğe alındığı için kötü bir cevap da her seferinde geri gelirdi. Web arayüzünde son
+cevabın altındaki "Yeniden üret" (ya da `ask --refresh`) modele yeniden soruyor ve önbellekteki
+cevabı değiştiriyor; eski cevaba verilen oy ayrı olarak kalıyor.
+
+`ask-batch` bir dosyanın her satırını ayrı bir soru olarak soruyor (boş ve `#` ile başlayan satırlar
+atlanıyor, `-` verilirse standart girdiden okuyor) ve her cevap için `ask --json` biçiminde bir JSON
+satırı yazıyor. Satırlar arasında konu taşınmıyor.
 
 `search` aramayı tek başına incelemek için: yalnızca embedding modelini yükleyip sohbet modeline
 gidecek parçaları, benzerliklerini, soruda tanıdığı alan adlarını ve sorunun eşiği geçip
@@ -339,7 +367,8 @@ işleniyor. Aynı yerdeki "Doküman sil" (ya da `remove-doc`) bir dosyayı `data
 kaldırıyor (yeniden gömme gerekmiyor); en az bir doküman kalması gerekiyor. Web arayüzü açıkken elle
 düzenlenen ya da silinen dosyalar kenar çubuğunda "İndeksi güncelle" düğmesiyle birlikte uyarı
 olarak çıkıyor, `status` da bunları listeliyor. Cevap önbelleği oradaki "Önbelleği temizle" ya da
-`cache --clear` ile boşaltılabiliyor.
+`cache --clear` ile boşaltılabiliyor. "Dokümanı incele" bir dokümanın hangi parçalara bölündüğünü
+başlık yollarıyla gösteriyor; yeni parçalar gömülürken web arayüzünde bir ilerleme çubuğu çıkıyor.
 
 Türkçe Vikipedi maddeleri adıyla ya da bağlantısıyla da eklenebiliyor: kenar çubuğunda
 "Vikipedi'den ekle" ya da `add-wiki`. Madde indirilip `data/docs/` içindekilerle aynı şekilde
