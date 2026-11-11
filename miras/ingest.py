@@ -40,8 +40,13 @@ def _doc_files(docs_dir: Path) -> list[Path]:
 
 
 def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool = False,
-           on_progress: Callable[[str], None] = lambda _msg: None) -> IngestReport:
-    """Yalnızca değişen dosyaları yeniden işler (içerik özetine göre)."""
+           on_progress: Callable[[str], None] = lambda _msg: None,
+           on_fraction: Callable[[float], None] = lambda _done: None) -> IngestReport:
+    """Yalnızca değişen dosyaları yeniden işler (içerik özetine göre).
+
+    `on_fraction` her dosya gömüldükten sonra gömülen parça oranıyla (0–1) çağrılır; süre
+    parça sayısıyla orantılı olduğu için web arayüzündeki ilerleme çubuğu bunu gösterir.
+    """
     # Farklı bir embedding modeliyle üretilmiş vektörler karşılaştırılamaz: baştan kur.
     if rebuild or store.get_meta("embed_model") not in (None, backend.embed_model):
         store.clear()
@@ -52,6 +57,8 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
 
     known = store.fingerprints()
     report = IngestReport([], [], [], 0)
+    # Önce neyin gömüleceği çıkarılır; toplam parça sayısı ilerlemeyi göstermek için gerekli.
+    todo = []
     for path in files:
         try:
             raw = path.read_text(encoding="utf-8-sig")
@@ -70,13 +77,18 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
                 store.delete_document(path.name)
                 report.removed.append(path.name)
             continue
-        on_progress(f"{path.name}: {len(chunks)} parça gömülüyor...")
+        todo.append((path.name, doc, fingerprint, chunks))
+
+    total = sum(len(chunks) for *_, chunks in todo)
+    for number, (filename, doc, fingerprint, chunks) in enumerate(todo, start=1):
+        on_progress(f"{filename}: {len(chunks)} parça gömülüyor ({number}/{len(todo)})...")
         embeddings = backend.embed_documents([c.embedding_text for c in chunks])
-        store.add_document(path.name, doc.title, doc.source_url, fingerprint,
+        store.add_document(filename, doc.title, doc.source_url, fingerprint,
                            [c.section for c in chunks], [c.text for c in chunks], embeddings,
                            doc.aliases)
-        report.added.append(path.name)
+        report.added.append(filename)
         report.chunks_embedded += len(chunks)
+        on_fraction(report.chunks_embedded / total)
 
     for filename in sorted(set(known) - {p.name for p in files}):
         store.delete_document(filename)

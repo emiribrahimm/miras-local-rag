@@ -45,17 +45,26 @@ def reindex(assistant: Assistant) -> tuple[list[str], list[str]]:
     added: list[str] = []
     errors: list[str] = []
     store = Store(SETTINGS.db_path)
+    bar = st.progress(0.0, text="Dokümanlar gömülüyor...")
+    state = {"text": "Dokümanlar gömülüyor...", "done": 0.0}
+
+    def show(text: str | None = None, done: float | None = None) -> None:
+        state["text"] = text or state["text"]
+        state["done"] = state["done"] if done is None else done
+        bar.progress(state["done"], text=state["text"])
+
     try:
-        with st.spinner("Dokümanlar gömülüyor..."):
-            report = ingest(store, assistant.backend, SETTINGS)
-            added = report.added
-            errors += report.skipped
-            # Önbellekteki asistan paylaşıldığı için yeni parçalar hemen aranabilir olur.
-            assistant.retriever = Retriever(store, assistant.backend.embed_model)
+        report = ingest(store, assistant.backend, SETTINGS,
+                        on_progress=lambda text: show(text=text), on_fraction=lambda done: show(done=done))
+        added = report.added
+        errors += report.skipped
+        # Önbellekteki asistan paylaşıldığı için yeni parçalar hemen aranabilir olur.
+        assistant.retriever = Retriever(store, assistant.backend.embed_model)
     except (BackendError, IndexError_, FileNotFoundError) as err:
         errors.append(str(err))
     finally:
         store.close()
+        bar.empty()
     return added, errors
 
 

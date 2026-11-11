@@ -286,3 +286,11 @@ def test_file_database_uses_wal_so_readers_do_not_block_writers(store, settings)
     store.cache_answer("k", "Cevap.")
     assert Store(settings.db_path).cached_answer("k") == "Cevap."
     reader.conn.rollback()
+
+
+def test_ingest_reports_progress_by_embedded_chunks(backend, settings, tmp_path):
+    messages, fractions = [], []
+    ingest(Store(tmp_path / "ilerleme.db"), backend, settings,
+           on_progress=messages.append, on_fraction=fractions.append)
+    assert messages == ["efes.md: 1 parça gömülüyor (1/2)...", "gobeklitepe.md: 2 parça gömülüyor (2/2)..."]
+    assert fractions == pytest.approx([1 / 3, 1.0])
