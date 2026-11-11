@@ -260,3 +260,13 @@ def test_config_shows_where_each_setting_comes_from(run, monkeypatch):
     assert lines["top_k"].endswith("MIRAS_TOP_K ile ezildi")
     assert lines["chat_device"].endswith("varsayılan (MIRAS_CHAT_DEVICE)")
     assert lines["temperature"].endswith("varsayılan (yalnızca config.py)")
+
+
+def test_chat_kaynak_prints_full_chunks_of_last_answer(chat, backend):
+    backend.reply = "Göbeklitepe 2018'de listeye girdi [K2]."
+    out = chat("kaynak", "Göbeklitepe hangi yıl listeye girdi?", "kaynak", "kaynak k1", "kaynak 9", "çık")
+    assert "Gösterilecek parça yok." in out
+    cited = out[out.index("[K2] Göbeklitepe  (gobeklitepe.md"):out.index("[K1] ")]
+    assert "https://example.org/g" in cited and "Neolitik bir arkeolojik alandır." in cited
+    assert "Göbeklitepe 2018 yılında Dünya Mirası listesine girdi." in out[out.index("[K1] "):]
+    assert "K1..K2 arasında bir parça yazın." in out

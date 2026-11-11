@@ -225,11 +225,32 @@ def _save_chat(turns: list[tuple[str, Answer]], target: str, settings: Settings)
     print(f"{len(turns)} soru -> {path}")
 
 
+def _show_chunks(answer: Answer | None, which: str) -> None:
+    """Son cevabın parçalarını tam metniyle basar; `which` "2" ya da "K2" ise yalnızca o parça."""
+    if answer is None or not answer.hits:
+        print("Gösterilecek parça yok.")
+        return
+    indices = answer.cited or list(range(len(answer.hits)))
+    if which:
+        number = which.upper().removeprefix("K")
+        if not number.isdigit() or not 1 <= int(number) <= len(answer.hits):
+            print(f"K1..K{len(answer.hits)} arasında bir parça yazın.")
+            return
+        indices = [int(number) - 1]
+    for i in indices:
+        hit = answer.hits[i]
+        print(f"\n[K{i + 1}] {hit.chunk.section}  ({hit.chunk.filename}, benzerlik {hit.score:.2f})")
+        if hit.chunk.source_url:
+            print(f"     {hit.chunk.source_url}")
+        print(hit.chunk.text)
+
+
 def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     print("Miras — Türkiye'nin UNESCO Dünya Mirası alanları asistanı. Çıkmak için 'çık' yazın.")
     print("Alan adı geçmeyen sorular önceki sorunun konusuyla sorulur; sıfırlamak için 'yeni' yazın.")
-    print("Sohbeti Markdown olarak kaydetmek için 'kaydet [dosya.md]' yazın.")
+    print("Sohbeti Markdown olarak kaydetmek için 'kaydet [dosya.md]', son cevabın parçalarını "
+          "tam okumak için 'kaynak [K2]' yazın.")
     save_history = _chat_history(CHAT_HISTORY)
     last: Answer | None = None
     turns: list[tuple[str, Answer]] = []
@@ -248,6 +269,9 @@ def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
             command, _, target = question.partition(" ")
             if command.lower() == "kaydet":
                 _save_chat(turns, target.strip(), settings)
+                continue
+            if command.lower() == "kaynak":
+                _show_chunks(turns[-1][1] if turns else None, target.strip())
                 continue
             last = _answer_streaming(assistant, question, args.verbose, last)
             turns.append((question, last))
