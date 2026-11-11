@@ -301,9 +301,20 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
     # Önbellek kapalı: süreler ve cevaplar her çalıştırmada modelden ölçülsün.
     assistant = _assistant(settings, cache=False)
     questions = evaluation.load_questions(ROOT / "data" / "eval" / "questions.json")
+    followups_path = ROOT / "data" / "eval" / "followups.json"
+    followup_items = evaluation.load_questions(followups_path) if followups_path.exists() else []
     if args.split:
         # Ayarlarken test sorularına bakmamak için yalnızca dev, son ölçüm için yalnızca test.
+        # Takip setinde dev/test ayrımı yok; bölüm seçilince atlanır.
         questions = [q for q in questions if q["split"] == args.split]
+        followup_items = []
+    ids = [i.strip() for i in (args.ids or "").split(",") if i.strip()]
+    if ids:
+        known = {q["id"] for q in questions} | {q["id"] for q in followup_items}
+        if unknown := [i for i in ids if i not in known]:
+            raise CommandError(f"Bilinmeyen soru: {', '.join(unknown)}")
+        questions = [q for q in questions if q["id"] in ids]
+        followup_items = [q for q in followup_items if q["id"] in ids]
     retrieval = evaluation.retrieval_summary(evaluation.evaluate_retrieval(
         questions, assistant.backend, assistant.retriever, settings.top_k, settings.bm25_weight))
 
@@ -315,9 +326,7 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
     answers = evaluation.answer_summary(rows)
 
     followups, followup_rows = None, []
-    followups_path = ROOT / "data" / "eval" / "followups.json"
-    # Takip setinde dev/test ayrımı yok; bölüm seçilince atlanır.
-    if followups_path.exists() and not args.split:
+    if followup_items:
         print("\nTakip soruları:")
 
         def show_followup(row: evaluation.FollowupRow) -> None:
@@ -325,8 +334,7 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
             print(f"{'✅' if row.passed else '❌'} {row.id} [{row.seconds:4.1f} sn] "
                   f"{' → '.join(row.turns)}{carried}\n     -> {row.answer[:160]}", flush=True)
 
-        followup_rows = evaluation.evaluate_followups(
-            evaluation.load_questions(followups_path), assistant, on_row=show_followup)
+        followup_rows = evaluation.evaluate_followups(followup_items, assistant, on_row=show_followup)
         followups = evaluation.followup_summary(followup_rows)
     header = {"chat_model": settings.chat_model, "chat_device": settings.chat_device,
               "embed_model": settings.embed_model,
@@ -335,10 +343,13 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
               "followup_min_similarity": settings.followup_min_similarity,
               "chunks": len(assistant.retriever.chunks)}
     stem = ROOT / "reports" / f"eval-{settings.chat_model}-{settings.chat_device}"
-    if args.split:
-        # Tam raporun üzerine yazılmasın.
-        header["subset"] = f"yalnızca {args.split} soruları"
-        stem = stem.with_name(f"{stem.name}-{args.split}")
+    # Alt kümelerin raporu tam raporun üzerine yazılmasın.
+    subset = ([f"yalnızca {args.split} soruları"] if args.split else []) + (
+        [f"seçili sorular ({', '.join(ids)})"] if ids else [])
+    if subset:
+        header["subset"] = ", ".join(subset)
+        stem = stem.with_name("-".join([stem.name] + ([args.split] if args.split else [])
+                                       + (["secili"] if ids else [])))
     evaluation.write_report(stem, header, retrieval, answers, rows, followups, followup_rows)
     print(f"\nGenel: {answers['overall']['passed']}/{answers['overall']['total']}  "
           f"-> {stem}.md")
@@ -481,6 +492,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("eval", help="Test setini çalıştır, reports/ altına rapor yaz")
     p.add_argument("--split", choices=["dev", "test"],
                    help="Yalnızca bu bölümün soruları (takip seti atlanır, rapor adına eklenir)")
+    p.add_argument("--ids", metavar="ID,ID",
+                   help="Yalnızca bu sorular, ör. a01,f03 (ana set ve takip seti; rapor adına -secili eklenir)")
     p.set_defaults(func=cmd_eval)
 
     p = sub.add_parser("feedback", help="Web arayüzünde verilen oyları listele (model çağırmaz)")

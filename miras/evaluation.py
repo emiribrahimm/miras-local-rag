@@ -256,7 +256,7 @@ def answer_summary(rows: list[AnswerRow]) -> dict:
         "out_of_domain_refused": rate([r for r in rows if r.type == "out_of_domain"]),
         "refused_by_gate_without_llm": sum(r.refusal_reason == "low_similarity" for r in rows),
         "median_seconds_when_llm_called": round(statistics.median(generated), 2) if generated else 0,
-        "max_seconds": round(max(r.seconds for r in rows), 2),
+        "max_seconds": round(max((r.seconds for r in rows), default=0.0), 2),
     }
 
 

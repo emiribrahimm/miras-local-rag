@@ -191,3 +191,20 @@ def test_eval_split_runs_one_half_and_keeps_full_report(run, eval_root, backend)
     assert "- Alt küme: yalnızca test soruları" in (reports / "eval-qwen2.5-7b-cpu-test.md").read_text(
         encoding="utf-8")
     assert not (reports / "eval-qwen2.5-7b-cpu.json").exists()
+
+
+def test_eval_ids_picks_questions_from_both_sets(run, eval_root):
+    import json
+
+    code, out, _ = run("eval", "--ids", "a01,f01")
+    assert code == 0 and "a01" in out and "f01" in out and "a02" not in out
+    report = json.loads((eval_root / "reports" / "eval-qwen2.5-7b-cpu-secili.json").read_text(encoding="utf-8"))
+    assert [r["id"] for r in report["rows"]] == ["a01"]
+    assert [r["id"] for r in report["followups"]["rows"]] == ["f01"]
+    assert report["config"]["subset"] == "seçili sorular (a01, f01)"
+
+
+def test_eval_ids_only_follow_up_and_unknown_ids(run, eval_root):
+    assert run("eval", "--ids", "f01")[0] == 0
+    code, _, err = run("eval", "--ids", "a01,zz9")
+    assert code == 1 and "Bilinmeyen soru: zz9" in err
