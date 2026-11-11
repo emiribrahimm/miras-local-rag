@@ -249,3 +249,15 @@ def test_last_answer_can_be_regenerated_past_the_cache(app, settings):
 def test_refused_answer_has_no_regenerate_button(app):
     app.chat_input[0].set_value("Pizza hamuru tarifi nedir?").run()
     assert not any(b.label == "Yeniden üret" for b in app.button)
+
+
+def test_document_chunks_can_be_inspected(app):
+    app.sidebar.selectbox(key="inspect").set_value("gobeklitepe.md").run()
+    assert not app.exception
+    assert any(c.value.startswith("2 parça · [kaynak](https://example.org/g)") for c in app.sidebar.caption)
+    labels = [m.value for m in app.sidebar.markdown]
+    assert "**1. Göbeklitepe**" in labels and "**2. Göbeklitepe › Koruma**" in labels
+    assert any("2018 yılında Dünya Mirası" in t.value for t in app.sidebar.text)
+
+    app.sidebar.selectbox(key="inspect").set_value("efes.md").run()
+    assert any("takma adlar: Ephesos, Ephesus" in c.value for c in app.sidebar.caption)

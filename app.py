@@ -176,6 +176,25 @@ def render_delete_result() -> None:
         st.success(f"Silindi: {filename}")
 
 
+def render_document(assistant: Assistant, filenames: list[str], titles: dict[str, str]) -> None:
+    """Seçilen dokümanın indeksteki parçaları; neyin aranabildiği görülsün (bellekten, sorgu yok)."""
+    target = st.selectbox("Doküman", filenames, key="inspect",
+                          format_func=lambda f: f"{titles[f]} ({f})")
+    chunks = [c for c in assistant.retriever.chunks if c.filename == target]
+    if not chunks:
+        return
+    first = chunks[0]
+    details = [f"{len(chunks)} parça"]
+    if first.aliases:
+        details.append("takma adlar: " + ", ".join(first.aliases))
+    if first.source_url:
+        details.append(f"[kaynak]({first.source_url})")
+    st.caption(" · ".join(details))
+    for number, chunk in enumerate(chunks, start=1):
+        st.markdown(f"**{number}. {chunk.section}**")
+        st.text(chunk.text)
+
+
 def render_cache() -> None:
     store = Store(SETTINGS.db_path)
     try:
@@ -294,6 +313,8 @@ with st.sidebar:
             if st.form_submit_button("Sil") and target:
                 delete_document(assistant, target)
     render_delete_result()
+    with st.expander("Dokümanı incele"):
+        render_document(assistant, filenames, titles)
     st.subheader("Örnek sorular")
     clicked = next((q for q in EXAMPLES if st.button(q, use_container_width=True)), None)
     if st.button("Sohbeti temizle"):
