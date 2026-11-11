@@ -64,8 +64,6 @@ A few things I added after looking at where it went wrong:
   sharing the most word stems with it wins (numbers count double, words from the heading path don't
   count). No model call. If nothing shares at least two stems or one number, nothing is highlighted.
 
-The design notes from the start of the project are in `docs/superpowers/specs/`.
-
 ## Setup
 
 You need Python 3.12, [uv](https://docs.astral.sh/uv/), about 7 GB of disk for the models and
