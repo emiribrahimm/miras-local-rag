@@ -160,10 +160,12 @@ EVAL_QUESTIONS = [
      "question": "Göbeklitepe hangi yıl listeye girdi?", "expected": [["2018"]]},
     {"id": "o01", "type": "out_of_domain", "split": "test",
      "question": "Pizza hamuru tarifi nedir?"},
+    {"id": "n01", "type": "near_miss", "split": "dev", "question": "Efes'e giriş ücreti ne kadar?"},
+    {"id": "o02", "type": "out_of_domain", "split": "dev", "question": "Python'da liste nasıl sıralanır?"},
 ]
 EVAL_FOLLOWUPS = [
     {"id": "f01", "type": "answerable", "doc": "efes.md",
-     "turns": ["Efes hangi ilde?", "Peki hangi ilçede?"], "expected": [["Selçuk"]]},
+     "turns": ["Efes hangi ilde?", "Peki hangi ilçesinde?"], "expected": [["Selçuk"]]},
 ]
 
 
@@ -270,3 +272,26 @@ def test_chat_kaynak_prints_full_chunks_of_last_answer(chat, backend):
     assert "https://example.org/g" in cited and "Neolitik bir arkeolojik alandır." in cited
     assert "Göbeklitepe 2018 yılında Dünya Mirası listesine girdi." in out[out.index("[K1] "):]
     assert "K1..K2 arasında bir parça yazın." in out
+
+
+def test_full_eval_runs_both_sets_without_the_answer_cache(run, eval_root, backend, store):
+    import json
+
+    backend.reply = "Efes İzmir ilindedir [K1]."
+    run("ask", "Efes hangi ilde?")  # önbelleğe girer; eval yine de modeli çağırmalı
+    calls = len(backend.chat_calls)
+    code, out, _ = run("eval")
+    assert code == 0 and "Genel: " in out and "Takip soruları: " in out
+    report = json.loads((eval_root / "reports" / "eval-qwen2.5-7b-cpu.json").read_text(encoding="utf-8"))
+    assert [r["id"] for r in report["rows"]] == ["a01", "a02", "o01", "n01", "o02"]
+    assert report["rows"][0]["passed"] and report["followups"]["rows"][0]["carried"] == ["Efes"]
+    assert report["config"]["top_k"] == 2 and "subset" not in report["config"]
+    assert len(backend.chat_calls) > calls and store.cache_size() == 1
+
+
+def test_calibrate_and_tune_hybrid_print_suggestions(run, eval_root, backend):
+    code, out, _ = run("calibrate")
+    assert code == 0 and "Önerilen eşik (dev sorularından)" in out
+    assert "Önerilen konu taşıma eşiği" in out and backend.chat_calls == []
+    code, out, _ = run("tune-hybrid")
+    assert code == 0 and "ağırlık" in out.splitlines()[0] and backend.chat_calls == []
