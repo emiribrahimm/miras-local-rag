@@ -151,3 +151,43 @@ def test_ask_refresh_calls_model_again(run, backend):
     out = run("ask", "--refresh", "Efes nerede?")[1]
     assert "İzmir" in out and len(backend.chat_calls) == 2
     assert "İzmir" in run("ask", "Efes nerede?")[1]
+
+
+EVAL_QUESTIONS = [
+    {"id": "a01", "type": "answerable", "split": "dev", "doc": "efes.md",
+     "question": "Efes hangi ilde?", "expected": [["İzmir"]]},
+    {"id": "a02", "type": "answerable", "split": "test", "doc": "gobeklitepe.md",
+     "question": "Göbeklitepe hangi yıl listeye girdi?", "expected": [["2018"]]},
+    {"id": "o01", "type": "out_of_domain", "split": "test",
+     "question": "Pizza hamuru tarifi nedir?"},
+]
+EVAL_FOLLOWUPS = [
+    {"id": "f01", "type": "answerable", "doc": "efes.md",
+     "turns": ["Efes hangi ilde?", "Peki hangi ilçede?"], "expected": [["Selçuk"]]},
+]
+
+
+@pytest.fixture
+def eval_root(run, monkeypatch, tmp_path):
+    import json
+
+    root = tmp_path / "proje"
+    (root / "data" / "eval").mkdir(parents=True)
+    (root / "data" / "eval" / "questions.json").write_text(json.dumps(EVAL_QUESTIONS), encoding="utf-8")
+    (root / "data" / "eval" / "followups.json").write_text(json.dumps(EVAL_FOLLOWUPS), encoding="utf-8")
+    monkeypatch.setattr(cli, "ROOT", root)
+    return root
+
+
+def test_eval_split_runs_one_half_and_keeps_full_report(run, eval_root, backend):
+    import json
+
+    backend.reply = "Efes İzmir ilindedir [K1]."
+    code, out, _ = run("eval", "--split", "test")
+    assert code == 0 and "a01" not in out and "a02" in out and "Takip soruları" not in out
+    reports = eval_root / "reports"
+    report = json.loads((reports / "eval-qwen2.5-7b-cpu-test.json").read_text(encoding="utf-8"))
+    assert [r["id"] for r in report["rows"]] == ["a02", "o01"] and "followups" not in report
+    assert "- Alt küme: yalnızca test soruları" in (reports / "eval-qwen2.5-7b-cpu-test.md").read_text(
+        encoding="utf-8")
+    assert not (reports / "eval-qwen2.5-7b-cpu.json").exists()

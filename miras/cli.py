@@ -301,6 +301,9 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
     # Önbellek kapalı: süreler ve cevaplar her çalıştırmada modelden ölçülsün.
     assistant = _assistant(settings, cache=False)
     questions = evaluation.load_questions(ROOT / "data" / "eval" / "questions.json")
+    if args.split:
+        # Ayarlarken test sorularına bakmamak için yalnızca dev, son ölçüm için yalnızca test.
+        questions = [q for q in questions if q["split"] == args.split]
     retrieval = evaluation.retrieval_summary(evaluation.evaluate_retrieval(
         questions, assistant.backend, assistant.retriever, settings.top_k, settings.bm25_weight))
 
@@ -313,7 +316,8 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
 
     followups, followup_rows = None, []
     followups_path = ROOT / "data" / "eval" / "followups.json"
-    if followups_path.exists():
+    # Takip setinde dev/test ayrımı yok; bölüm seçilince atlanır.
+    if followups_path.exists() and not args.split:
         print("\nTakip soruları:")
 
         def show_followup(row: evaluation.FollowupRow) -> None:
@@ -331,6 +335,10 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
               "followup_min_similarity": settings.followup_min_similarity,
               "chunks": len(assistant.retriever.chunks)}
     stem = ROOT / "reports" / f"eval-{settings.chat_model}-{settings.chat_device}"
+    if args.split:
+        # Tam raporun üzerine yazılmasın.
+        header["subset"] = f"yalnızca {args.split} soruları"
+        stem = stem.with_name(f"{stem.name}-{args.split}")
     evaluation.write_report(stem, header, retrieval, answers, rows, followups, followup_rows)
     print(f"\nGenel: {answers['overall']['passed']}/{answers['overall']['total']}  "
           f"-> {stem}.md")
@@ -471,6 +479,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_tune_hybrid)
 
     p = sub.add_parser("eval", help="Test setini çalıştır, reports/ altına rapor yaz")
+    p.add_argument("--split", choices=["dev", "test"],
+                   help="Yalnızca bu bölümün soruları (takip seti atlanır, rapor adına eklenir)")
     p.set_defaults(func=cmd_eval)
 
     p = sub.add_parser("feedback", help="Web arayüzünde verilen oyları listele (model çağırmaz)")

@@ -350,7 +350,8 @@ def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
         f"- top_k: {header['top_k']}, benzerlik eşiği: {header['min_similarity']}, "
         f"BM25 ağırlığı: {header.get('bm25_weight', 0.0)}, "
         f"takip konu eşiği: {header.get('followup_min_similarity', 0.0)}",
-        f"- Parça sayısı: {header['chunks']}", "",
+        f"- Parça sayısı: {header['chunks']}",
+        *([f"- Alt küme: {header['subset']}"] if header.get("subset") else []), "",
         "## Arama (yalnızca cevaplanabilir sorular)", "",
         f"- Doğru doküman 1. sırada: {retrieval['doc_hit_at_1']:.0%}",
         f"- Doğru doküman ilk {header['top_k']} içinde: {retrieval['doc_hit_at_k']:.0%}",
