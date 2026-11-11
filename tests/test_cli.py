@@ -224,3 +224,29 @@ def test_compare_reports_command(run, tmp_path):
     assert "Düzelen (1):\n  a01 Efes nerede?" in out and "Takip soruları" not in out
     code, _, err = run("compare-reports", str(tmp_path / "yok.json"), str(tmp_path / "yeni.json"))
     assert code == 1 and "Rapor okunamadı" in err
+
+
+def test_ask_batch_writes_one_json_line_per_question(run, backend, tmp_path):
+    import json
+
+    backend.reply = "Efes İzmir'dedir [K1]."
+    questions = tmp_path / "sorular.txt"
+    questions.write_text("# deneme\nEfes nerede?\n\n  Pizza hamuru tarifi nedir?\n", encoding="utf-8")
+    code, out, err = run("ask-batch", str(questions), "--out", str(tmp_path / "cevaplar.jsonl"))
+    assert code == 0 and "2 cevap ->" in out and "2/2 Pizza" in err
+    lines = (tmp_path / "cevaplar.jsonl").read_text(encoding="utf-8").splitlines()
+    rows = [json.loads(line) for line in lines]
+    assert [r["question"] for r in rows] == ["Efes nerede?", "Pizza hamuru tarifi nedir?"]
+    assert rows[0]["answer"] == "Efes İzmir'dedir [K1]." and rows[1]["refused"] is True
+
+
+def test_ask_batch_reads_stdin_and_rejects_empty_files(run, monkeypatch, tmp_path):
+    import io
+    import json
+
+    monkeypatch.setattr("sys.stdin", io.StringIO("Efes nerede?\n"))
+    code, out, _ = run("ask-batch", "-")
+    assert code == 0 and json.loads(out)["question"] == "Efes nerede?"
+    (tmp_path / "bos.txt").write_text("# sadece yorum\n", encoding="utf-8")
+    code, _, err = run("ask-batch", str(tmp_path / "bos.txt"))
+    assert code == 1 and "Dosyada soru yok" in err

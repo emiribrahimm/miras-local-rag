@@ -1,5 +1,5 @@
-"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, search, chat, eval, calibrate, feedback,
-status, docs, remove-doc, cache, compare-reports."""
+"""Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, ask-batch, search, chat, eval,
+calibrate, feedback, status, docs, remove-doc, cache, compare-reports."""
 
 from __future__ import annotations
 
@@ -129,6 +129,32 @@ def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
         print(json.dumps(answer_json(args.question, answer, settings), ensure_ascii=False, indent=2))
         return
     _answer_streaming(_assistant(settings), args.question, args.verbose, refresh=args.refresh)
+
+
+def cmd_ask_batch(args: argparse.Namespace, settings: Settings) -> None:
+    """Dosyadaki her satırı ayrı bir soru olarak sorar; her cevap bir JSON satırı (JSONL)."""
+    try:
+        text = sys.stdin.read() if str(args.file) == "-" else args.file.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as err:
+        raise CommandError(f"Soru dosyası okunamadı: {err}") from err
+    questions = [line.strip() for line in text.splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+    if not questions:
+        raise CommandError("Dosyada soru yok (boş ve # ile başlayan satırlar atlanır).")
+    assistant = _assistant(settings)
+    out = args.out.open("w", encoding="utf-8") if args.out else sys.stdout
+    try:
+        for number, question in enumerate(questions, start=1):
+            _status(f"{number}/{len(questions)} {question[:60]}")
+            # Sorular birbirinden bağımsız; önceki satırın konusu taşınmaz.
+            answer = assistant.ask(question, refresh=args.refresh)
+            print(json.dumps(answer_json(question, answer, settings), ensure_ascii=False),
+                  file=out, flush=True)
+    finally:
+        if args.out:
+            out.close()
+    if args.out:
+        print(f"{len(questions)} cevap -> {args.out}")
 
 
 def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
@@ -488,6 +514,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--refresh", action="store_true",
                    help="Önbellekteki cevabı kullanma, modeli yeniden çağır ve önbelleği güncelle")
     p.set_defaults(func=cmd_ask)
+
+    p = sub.add_parser("ask-batch", help="Dosyadaki soruları (satır başına bir) sor, JSONL yaz")
+    p.add_argument("file", type=Path, help="Soru dosyası; - ise standart girdi")
+    p.add_argument("--out", type=Path, metavar="DOSYA", help="Cevapları bu dosyaya yaz (varsayılan: ekran)")
+    p.add_argument("--refresh", action="store_true", help="Önbelleği kullanma, modeli yeniden çağır")
+    p.set_defaults(func=cmd_ask_batch)
 
     p = sub.add_parser("search", help="Soruya getirilen parçaları göster (sohbet modeli çağırmaz)")
     p.add_argument("question")
