@@ -221,6 +221,7 @@ class AnswerRow:
     cited_expected_doc: bool | None
     top_score: float
     seconds: float
+    doc: str | None = None  # cevaplanabilir sorularda cevabın bulunduğu doküman
 
 
 def evaluate_answers(questions: list[dict], assistant: Assistant,
@@ -232,10 +233,22 @@ def evaluate_answers(questions: list[dict], assistant: Assistant,
         row = AnswerRow(q["id"], q["type"], q["split"], q["question"], answer.text, answer.refused,
                         answer.refusal_reason, passed, cited_doc,
                         max((h.score for h in answer.hits), default=0.0),
-                        answer.retrieval_seconds + answer.generation_seconds)
+                        answer.retrieval_seconds + answer.generation_seconds, q.get("doc"))
         on_row(row)
         rows.append(row)
     return rows
+
+
+def by_doc(rows: list[AnswerRow]) -> dict[str, dict]:
+    """Cevaplanabilir sorular doküman bazında: hangi maddede zorlandığı genel skordan görünmüyor."""
+    result: dict[str, dict] = {}
+    for r in sorted((r for r in rows if r.type == "answerable" and r.doc), key=lambda r: r.doc):
+        d = result.setdefault(r.doc, {"passed": 0, "total": 0, "refused": 0, "cited": 0})
+        d["passed"] += r.passed
+        d["total"] += 1
+        d["refused"] += r.refused
+        d["cited"] += bool(r.cited_expected_doc)
+    return result
 
 
 def answer_summary(rows: list[AnswerRow]) -> dict:
@@ -257,6 +270,7 @@ def answer_summary(rows: list[AnswerRow]) -> dict:
         "refused_by_gate_without_llm": sum(r.refusal_reason == "low_similarity" for r in rows),
         "median_seconds_when_llm_called": round(statistics.median(generated), 2) if generated else 0,
         "max_seconds": round(max((r.seconds for r in rows), default=0.0), 2),
+        "by_doc": by_doc(rows),
     }
 
 
@@ -367,6 +381,14 @@ def write_report(path_stem: Path, header: dict, retrieval: dict, answers: dict,
         f"- Model çağrılmadan kapıda reddedilen: {answers['refused_by_gate_without_llm']}",
         f"- Model çağrılan sorularda ortanca süre: {answers['median_seconds_when_llm_called']} sn"
         f" (en uzun: {answers['max_seconds']} sn)", "",
+    ]
+    if answers.get("by_doc"):
+        lines += ["## Doküman bazında (cevaplanabilir sorular)", "",
+                  "| Doküman | Doğru | Reddedilen | Doğru atıf |", "|---|---|---|---|"]
+        lines += [f"| {doc} | {d['passed']}/{d['total']} | {d['refused']} | {d['cited']} |"
+                  for doc, d in answers["by_doc"].items()]
+        lines.append("")
+    lines += [
         "## Soru bazında sonuçlar", "",
         "| # | Tür | Sonuç | Skor | Süre (sn) | Soru | Cevap |", "|---|---|---|---|---|---|---|",
     ]

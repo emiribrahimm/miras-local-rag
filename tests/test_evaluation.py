@@ -162,3 +162,23 @@ def test_tune_embeds_each_question_once(store, backend, settings):
                                   2, settings.min_similarity, weights=(0.0, 0.5))
     assert len(calls) == 2 and [r["weight"] for r in results] == [0.0, 0.5]
     assert results[0]["dev"]["questions"] == 1 and "answerable_gated" in results[1]["test"]
+
+
+def test_report_breaks_answerable_questions_down_by_doc(assistant, backend, tmp_path):
+    backend.reply = "Göbeklitepe 2018 yılında listeye girdi [K1]."
+    questions = [
+        {"id": "1", "type": "answerable", "split": "dev", "doc": "gobeklitepe.md",
+         "question": "Göbeklitepe ne zaman listeye girdi?", "expected": [["2018"]]},
+        {"id": "2", "type": "answerable", "split": "dev", "doc": "efes.md",
+         "question": "Efes hangi ilçede?", "expected": [["Selçuk"]]},
+        {"id": "3", "type": "out_of_domain", "split": "dev", "question": "Pizza hamuru tarifi nedir?"},
+    ]
+    summary = answer_summary(evaluate_answers(questions, assistant))
+    assert summary["by_doc"] == {
+        "efes.md": {"passed": 0, "total": 1, "refused": 0, "cited": 1},
+        "gobeklitepe.md": {"passed": 1, "total": 1, "refused": 0, "cited": 1}}
+    header = {"chat_model": "m", "chat_device": "cpu", "embed_model": "e", "top_k": 2,
+              "min_similarity": 0.2, "chunks": 3}
+    write_report(tmp_path / "r", header, retrieval_summary([]), summary, [])
+    md = (tmp_path / "r.md").read_text(encoding="utf-8")
+    assert "| efes.md | 0/1 | 0 | 1 |" in md and "| gobeklitepe.md | 1/1 | 0 | 1 |" in md
