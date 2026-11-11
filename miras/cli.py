@@ -64,13 +64,13 @@ def _print_sources(answer: Answer, verbose: bool) -> None:
 
 
 def _answer_streaming(assistant: Assistant, question: str, verbose: bool,
-                      previous: Answer | None = None) -> Answer:
+                      previous: Answer | None = None, refresh: bool = False) -> Answer:
     prepared = assistant.prepare(question, previous)
     if prepared.carried:
         _status(f"konu: {', '.join(prepared.carried)}")
     started = time.perf_counter()
     pieces = []
-    for piece in assistant.generate(prepared):
+    for piece in assistant.generate(prepared, refresh):
         pieces.append(piece)
         print(piece, end="", flush=True)
     print()
@@ -137,10 +137,10 @@ def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
 
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
     if args.json:
-        answer = _assistant(settings).ask(args.question)
+        answer = _assistant(settings).ask(args.question, refresh=args.refresh)
         print(json.dumps(answer_json(args.question, answer, settings), ensure_ascii=False, indent=2))
         return
-    _answer_streaming(_assistant(settings), args.question, args.verbose)
+    _answer_streaming(_assistant(settings), args.question, args.verbose, refresh=args.refresh)
 
 
 def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
@@ -450,6 +450,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("question")
     p.add_argument("-v", "--verbose", action="store_true", help="Parça metinlerini ve süreleri göster")
     p.add_argument("--json", action="store_true", help="Cevabı ve kaynakları JSON olarak yaz (akış yok)")
+    p.add_argument("--refresh", action="store_true",
+                   help="Önbellekteki cevabı kullanma, modeli yeniden çağır ve önbelleği güncelle")
     p.set_defaults(func=cmd_ask)
 
     p = sub.add_parser("search", help="Soruya getirilen parçaları göster (sohbet modeli çağırmaz)")

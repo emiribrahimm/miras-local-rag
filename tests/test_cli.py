@@ -141,3 +141,13 @@ def test_ask_json_reports_refusal(run):
 
     data = json.loads(run("ask", "--json", "Pizza hamuru tarifi nedir?")[1])
     assert data["refused"] is True and data["refusal_reason"] == "low_similarity"
+
+
+def test_ask_refresh_calls_model_again(run, backend):
+    backend.reply = "Efes Ankara'dadır [K1]."
+    run("ask", "Efes nerede?")
+    backend.reply = "Efes İzmir'dedir [K1]."
+    assert "Ankara" in run("ask", "Efes nerede?")[1]
+    out = run("ask", "--refresh", "Efes nerede?")[1]
+    assert "İzmir" in out and len(backend.chat_calls) == 2
+    assert "İzmir" in run("ask", "Efes nerede?")[1]
