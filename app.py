@@ -11,7 +11,7 @@ import streamlit as st
 
 from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
-from miras.export import conversation_markdown
+from miras.export import conversation_json, conversation_markdown
 from miras.highlight import emphasize
 from miras.feedback import save_vote
 from miras.ingest import ingest, pending_changes, remove_document, save_uploads
@@ -305,6 +305,9 @@ with st.sidebar:
     st.download_button("Sohbeti indir (.md)", conversation_markdown(turns, SETTINGS, now) if turns else "",
                        file_name=f"miras-sohbet-{now:%Y%m%d-%H%M}.md", mime="text/markdown",
                        disabled=not turns, help="Sorular, cevaplar ve kaynaklarıyla birlikte")
+    st.download_button("Sohbeti indir (.json)", conversation_json(turns, SETTINGS, now) if turns else "",
+                       file_name=f"miras-sohbet-{now:%Y%m%d-%H%M}.json", mime="application/json",
+                       disabled=not turns, help="Benzerlik skorları ve destek cümleleriyle, betikler için")
 
 history: list[tuple[str, Answer]] = st.session_state.setdefault("history", [])
 session_id = st.session_state.setdefault("session_id", uuid.uuid4().hex)

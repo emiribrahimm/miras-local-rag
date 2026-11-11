@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from .config import Settings
@@ -70,3 +71,11 @@ def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
             "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
             "retrieval_seconds": round(answer.retrieval_seconds, 3),
             "generation_seconds": round(answer.generation_seconds, 3)}
+
+
+def conversation_json(history: list[tuple[str, Answer]], settings: Settings, now: datetime) -> str:
+    """Sohbet, her tur `answer_json` biçiminde; web arayüzündeki JSON indirme düğmesi için."""
+    payload = {"created": now.isoformat(timespec="seconds"), "chat_model": settings.chat_model,
+               "embed_model": settings.embed_model,
+               "turns": [answer_json(question, answer, settings) for question, answer in history]}
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"

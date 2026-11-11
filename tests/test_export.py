@@ -56,3 +56,17 @@ def test_answer_json_carries_topic_and_empty_question_has_no_sources(assistant, 
     assert data["sources"][0]["label"] == "K1" and data["chat_model"] == settings.chat_model
     empty = answer_json("", assistant.ask(""), settings)
     assert empty["refusal_reason"] == "empty" and empty["sources"] == []
+
+
+def test_conversation_json_has_every_turn(assistant, backend, settings):
+    import json
+
+    from miras.export import conversation_json
+
+    backend.reply = "Efes İzmir'dedir [K1]."
+    history = [("Efes nerede?", assistant.ask("Efes nerede?")),
+               ("Pizza nasıl yapılır?", assistant.ask("Pizza nasıl yapılır?"))]
+    data = json.loads(conversation_json(history, settings, NOW))
+    assert data["created"] == "2026-10-26T14:05:00" and data["embed_model"] == settings.embed_model
+    assert [t["question"] for t in data["turns"]] == ["Efes nerede?", "Pizza nasıl yapılır?"]
+    assert data["turns"][0]["sources"][0]["cited"] is True and data["turns"][1]["refused"] is True

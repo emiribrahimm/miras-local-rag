@@ -85,6 +85,8 @@ def test_download_button_follows_history(app):
     app.chat_input[0].set_value("Efes nerede?").run()
     assert not app.exception
     assert not app.sidebar.get("download_button")[0].proto.disabled
+    json_button = app.sidebar.get("download_button")[1]
+    assert json_button.proto.label == "Sohbeti indir (.json)" and not json_button.proto.disabled
 
 
 def test_deleted_doc_leaves_list_and_search(app, settings):
