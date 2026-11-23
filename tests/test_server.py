@@ -1,5 +1,6 @@
 """HTTP API: port 0'da gerçek bir sunucu, FakeBackend ile."""
 
+import http.client
 import json
 import threading
 import urllib.error
@@ -13,11 +14,20 @@ from miras.server import make_server
 @pytest.fixture
 def call(assistant):
     server = make_server(assistant, port=0)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
 
-    def call(path: str, body: dict | bytes | None = None) -> tuple[int, dict]:
+    def call(path: str, body: dict | bytes | None = None, length: int | None = None) -> tuple[int, dict]:
+        if length is not None:
+            conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
+            conn.putrequest("POST", path)
+            conn.putheader("Content-Length", str(length))
+            conn.endheaders()
+            response = conn.getresponse()
+            result = response.status, json.loads(response.read())
+            conn.close()
+            return result
         data = body if isinstance(body, bytes) or body is None else json.dumps(body).encode("utf-8")
         request = urllib.request.Request(base + path, data=data, method="POST" if data is not None else "GET")
         try:
@@ -79,3 +89,22 @@ def test_bad_requests_get_a_json_error(call):
     assert call("/ask", {"question": "Efes?", "docs": "efes.md"})[0] == 400
     status, data = call("/yok")
     assert status == 404 and data["error"] == "GET /yok yok."
+
+
+def test_method_size_and_model_errors(call, backend, monkeypatch):
+    from miras.backends import BackendError
+    from miras.server import MAX_BODY_BYTES
+
+    status, data = call("/docs", {})
+    assert status == 405 and data["error"] == "/docs için POST kullanılmaz."
+    status, data = call("/ask", length=MAX_BODY_BYTES + 1)  # gövde gönderilmeden reddedilir
+    assert status == 413 and str(MAX_BODY_BYTES) in data["error"]
+    assert call("/health")[0] == 200  # sunucu ayakta
+
+    def broken(*args, **kwargs):
+        raise BackendError("Model yüklenemedi.")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(backend, "stream_chat", broken)
+    status, data = call("/ask", {"question": "Efes nerede?"})
+    assert status == 503 and data["error"] == "Model yüklenemedi."

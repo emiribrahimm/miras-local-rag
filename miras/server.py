@@ -12,8 +12,12 @@ from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .backends import BackendError
 from .export import answer_json
 from .pipeline import Assistant
+
+# Soru en fazla 1000 karakter; bundan büyük gövde okunmadan reddedilir.
+MAX_BODY_BYTES = 64 * 1024
 
 
 class RequestError(Exception):
@@ -113,16 +117,31 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765)
             self._handle("POST")
 
         def _handle(self, method: str) -> None:
+            path = self.path.split("?", 1)[0]
             try:
-                route = api.routes.get((method, self.path.split("?", 1)[0]))
+                route = api.routes.get((method, path))
                 if route is None:
-                    raise RequestError(HTTPStatus.NOT_FOUND, f"{method} {self.path} yok.")
+                    if any(p == path for _, p in api.routes):
+                        raise RequestError(HTTPStatus.METHOD_NOT_ALLOWED, f"{path} için {method} kullanılmaz.")
+                    raise RequestError(HTTPStatus.NOT_FOUND, f"{method} {path} yok.")
                 self._send(HTTPStatus.OK, route(self._body() if method == "POST" else {}))
             except RequestError as err:
                 self._send(err.status, {"error": str(err)})
+            except BackendError as err:
+                self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(err)})
+            except Exception as err:  # sunucu tek bir bozuk istek yüzünden düşmesin
+                self._send(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(err).__name__}: {err}"})
 
         def _body(self) -> dict:
-            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                raise RequestError(HTTPStatus.BAD_REQUEST, "Content-Length geçersiz.") from None
+            if length > MAX_BODY_BYTES:
+                # Gövde okunmadığı için bağlantı açık kalırsa sıradaki istek bozulur.
+                self.close_connection = True
+                raise RequestError(HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                                   f"Gövde en fazla {MAX_BODY_BYTES} bayt olabilir.")
             try:
                 body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             except (UnicodeDecodeError, json.JSONDecodeError) as err:
