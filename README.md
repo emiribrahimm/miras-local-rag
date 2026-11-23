@@ -65,6 +65,11 @@ A few things I added after looking at where it went wrong:
   the CLI. Each answer sentence goes to the chunks its `[K1]` tags point at, and the chunk sentence
   sharing the most word stems with it wins (numbers count double, words from the heading path don't
   count). No model call. If nothing shares at least two stems or one number, nothing is highlighted.
+- A question naming two sites ("Efes mi Göbeklitepe mi listeye daha önce girdi?") used to get all
+  4 chunks from whichever site was closer, so the model could only answer half of it. Now when two
+  or more sites are named, each gets its best chunk first and the rest are filled by ranking as
+  usual (with more sites than `top_k`, the best ranked ones win). The prompt also asks for each
+  site's facts to be cited from its own chunk. `search` says when this kicks in.
 
 ## Setup
 
@@ -191,13 +196,15 @@ source: https://tr.wikipedia.org/wiki/Troya
 
 ## Results
 
-The eval set in `data/eval/questions.json` has 44 questions: 26 answerable, 10 on-topic but not
-covered by the docs (should be refused) and 8 off-topic. They're split into `dev` and `test`, and
+The eval set in `data/eval/questions.json` has 48 questions: 30 answerable (4 of them compare two
+sites, their `doc` is a list and the citation only counts if both documents are cited), 10
+on-topic but not covered by the docs (should be refused) and 8 off-topic. They're split into `dev` and `test`, and
 I only looked at `dev` while tuning the threshold and the prompt.
 
 With `qwen2.5-7b` on CPU it got 44/44 (22/22 on the test half), cited the right document every
 time, and took about 14 seconds per answer (median, when the model is called). The full report
-with every answer is in [`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-7b-cpu.md).
+with every answer is in [`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-7b-cpu.md). That run
+was on the first 44 questions, before the comparison ones were added.
 
 Take that with a grain of salt though. It's a small set I wrote myself, and scoring is keyword
 based, so it says more about this kind of question than about the system in general.
@@ -292,6 +299,12 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   CLI'da `»` ile. Cevabın her cümlesi `[K1]` etiketinin gösterdiği parçaya bağlanıyor ve parçada
   onunla en çok kelime kökü paylaşan cümle seçiliyor (sayılar iki kat, başlık yolundaki kelimeler
   hiç sayılmıyor). Model çağrısı yok. En az iki ortak kök ya da bir ortak sayı yoksa vurgu yapılmıyor.
+- İki alanı birden anan bir soruda ("Efes mi Göbeklitepe mi listeye daha önce girdi?") 4 parçanın
+  hepsi hangi alan daha yakınsa ondan geliyordu, model sorunun yarısını cevaplayabiliyordu. Artık
+  soruda iki ya da daha fazla alan geçince önce her alanın en iyi parçası alınıyor, kalan yerler
+  her zamanki sıralamayla doluyor (alan sayısı `top_k`'yı aşarsa en iyi sıradakiler kalıyor).
+  Prompt da her alanın bilgisinin kendi parçasından etiketlenmesini istiyor. `search` bunun devreye
+  girdiğini yazıyor.
 
 ### Kurulum
 
@@ -416,13 +429,15 @@ source: https://tr.wikipedia.org/wiki/Troya
 
 ### Sonuçlar
 
-`data/eval/questions.json` içinde 44 soru var: 26'sı dokümanlardan cevaplanabilir, 10'u konuyla
-ilgili ama dokümanlarda yok (reddedilmeli), 8'i tamamen konu dışı. Sorular `dev` ve `test` olarak
+`data/eval/questions.json` içinde 48 soru var: 30'u dokümanlardan cevaplanabilir (4'ü iki alanı
+karşılaştırıyor; bunların `doc` alanı liste ve atıf ancak iki dokümana da yapılırsa sayılıyor),
+10'u konuyla ilgili ama dokümanlarda yok (reddedilmeli), 8'i tamamen konu dışı. Sorular `dev` ve `test` olarak
 ikiye ayrılmış durumda; eşiği ve prompt'u ayarlarken sadece `dev` sorularına baktım.
 
 CPU'da `qwen2.5-7b` ile 44/44 aldı (test kısmında 22/22), atıfların hepsi doğru dokümana gidiyordu.
 Model çağrılan sorularda ortanca süre 14 saniye civarı. Soru soru cevapların olduğu rapor
-[`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-7b-cpu.md) dosyasında.
+[`reports/eval-qwen2.5-7b-cpu.md`](reports/eval-qwen2.5-7b-cpu.md) dosyasında. O çalıştırma
+karşılaştırma soruları eklenmeden önceki 44 soruyla yapıldı.
 
 Bu sonucu fazla büyütmemek lazım: set küçük, soruları ben yazdım ve puanlama anahtar kelimeye
 dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğru cevap vereceğini değil.
