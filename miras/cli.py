@@ -171,7 +171,9 @@ def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
         raise CommandError("Bir soru yazın.")
     mentioned = assistant.retriever.mentioned_titles(prepared.question)
     if mentioned:
-        print(f"Soruda geçen alanlar: {', '.join(sorted(mentioned))} (sıralamada +{TITLE_BOOST})")
+        quota = ", her alandan en az bir parça" if len(mentioned) > 1 else ""
+        print(f"Soruda geçen alanlar: {', '.join(sorted(mentioned))} "
+              f"(sıralamada +{TITLE_BOOST}{quota})")
     for i, hit in enumerate(prepared.hits, start=1):
         print(f"[K{i}] {hit.score:.3f}  {hit.chunk.section}  ({hit.chunk.filename})")
         print(f"     {' '.join(hit.chunk.text.split())[:args.chars]}")

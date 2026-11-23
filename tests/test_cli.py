@@ -83,6 +83,13 @@ def test_search_shows_chunks_and_gate_without_chat_model(run, backend):
     assert "[K2]" not in out and "bu parçalar modele gider" in out
 
 
+def test_search_notes_per_site_quota_for_comparisons(run):
+    out = run("search", "Göbeklitepe mi Efes mi daha eski?")[1]
+    assert out.splitlines()[0] == ("Soruda geçen alanlar: Efes, Göbeklitepe "
+                                   "(sıralamada +0.1, her alandan en az bir parça)")
+    assert "(efes.md)" in out and "(gobeklitepe.md)" in out
+
+
 def test_search_reports_refusal_below_threshold(run):
     out = run("search", "Pizza hamuru tarifi nedir?")[1]
     assert "Soruda geçen" not in out and "model çağrılmaz, soru reddedilir" in out
