@@ -58,6 +58,19 @@ def test_answer_json_carries_topic_and_empty_question_has_no_sources(assistant, 
     assert empty["refusal_reason"] == "empty" and empty["sources"] == []
 
 
+def test_document_filter_is_exported(assistant, backend, settings):
+    from miras.export import answer_json
+
+    backend.reply = "Efes İzmir'dedir [K1]."
+    limited = assistant.ask("Efes nerede?", docs=frozenset({"efes.md"}))
+    text = conversation_markdown([("Efes nerede?", limited)], settings, NOW)
+    assert "> Efes nerede?\n\n🔎 Arama şu dokümanlarla sınırlıydı: efes.md\n" in text
+    assert answer_json("Efes nerede?", limited, settings)["docs"] == ["efes.md"]
+    plain = assistant.ask("Efes nerede?")
+    assert "sınırlıydı" not in conversation_markdown([("Efes nerede?", plain)], settings, NOW)
+    assert answer_json("Efes nerede?", plain, settings)["docs"] == []
+
+
 def test_conversation_json_has_every_turn(assistant, backend, settings):
     import json
 

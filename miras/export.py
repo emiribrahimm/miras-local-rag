@@ -46,6 +46,8 @@ def conversation_markdown(history: list[tuple[str, Answer]], settings: Settings,
         parts += ["", f"## Soru {number}", "", f"> {' '.join(question.split())}", ""]
         if answer.carried:
             parts += [f"↪ Önceki sorudan devam: {', '.join(answer.carried)}", ""]
+        if answer.docs:
+            parts += [f"🔎 Arama şu dokümanlarla sınırlıydı: {', '.join(answer.docs)}", ""]
         parts.append(answer.text)
         lines, linked = _sources(answer)
         any_linked |= linked
@@ -68,6 +70,7 @@ def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
                for i, source in enumerate(answer_sources(answer))]
     return {"question": question, "answer": answer.text, "refused": answer.refused,
             "refusal_reason": answer.refusal_reason, "carried": list(answer.carried),
+            "docs": list(answer.docs),
             "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
             "retrieval_seconds": round(answer.retrieval_seconds, 3),
             "generation_seconds": round(answer.generation_seconds, 3)}
