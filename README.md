@@ -261,6 +261,10 @@ the scores before and after, and which questions got fixed or broken in between.
   short follow-up without one ("Peki ne zaman?") can score below the floor and lose the topic, and
   an off-topic one that happens to use one ("Orada yarın hava nasıl?") gets the site name and has
   to be refused by the model.
+- Comparison questions only get one guaranteed chunk per named site (the rest go by ranking). That's
+  enough for a year or a province, but if one site's answer sits in a chunk that ranks low it can
+  still be missed. The 4 comparison questions in the eval set haven't been run on the real models
+  yet.
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
   bigger typos like "Gbeklitpe" fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/` (`update-wiki` brings them
@@ -524,6 +528,10 @@ ve sonraki skorları ve arada düzelen ya da bozulan soruları listeliyor.
   zaman?" gibi bu kelimelerden birini içermeyen kısa bir soru eşiğin altında kalıp konuyu
   kaybedebilir, birini içeren konu dışı bir soru ("Orada yarın hava nasıl?") ise alan adını alıp
   modelin reddetmesine kalır.
+- Karşılaştırma sorularında adı geçen her alan için yalnızca bir parça garanti (geri kalanı
+  sıralamaya göre). Bir yıl ya da il için yetiyor, ama bir alanın cevabı sıralamada geride kalan bir
+  parçadaysa yine kaçabilir. Değerlendirmedeki 4 karşılaştırma sorusu henüz gerçek modellerle
+  çalıştırılmadı.
 - Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
   gibi daha büyük hatalarda sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru (`update-wiki` onları
