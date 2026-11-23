@@ -100,6 +100,7 @@ uv run python main.py ask -v "Ani hangi ilde?"   # also prints chunks and timing
 uv run python main.py ask --json "Ani hangi ilde?"   # answer, sources and timings as JSON
 uv run python main.py search "Ani hangi ilde?"   # retrieved chunks and the gate, no chat model
 uv run python main.py ask --refresh "Ani hangi ilde?"   # skip the cached answer, ask the model again
+uv run python main.py ask --doc efes "Tiyatro kaç kişilik?"   # only search some documents
 uv run python main.py ask-batch sorular.txt --out cevaplar.jsonl   # one question per line
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # needs internet
@@ -136,6 +137,13 @@ given to the old answer is kept separately.
 `search` is for looking at retrieval on its own: it loads only the embedding model and prints the
 chunks that would go to the chat model, their similarity, which site names it spotted in the
 question and whether the question passes the threshold. `-k` changes how many chunks come back.
+
+`--doc` on `ask`, `search`, `ask-batch` and `chat` keeps the search inside some documents. It takes
+a file name (`efes.md` or `efes`), a title (`"Nemrut Dağı"`) or an alias (`Truva`), can be repeated
+or comma separated, and an unknown name stops with the list of indexed files. Inside `chat`,
+`sadece efes, troya` sets it and `sadece` on its own clears it; in the web UI it's "Sadece şu
+alanlarda ara" in the sidebar. The threshold still applies, so a question about a site outside the
+selection is refused without calling the model. The Markdown and JSON exports note the filter.
 
 Each answer also gets a 👍/👎. Votes go into the same SQLite file with the question, the answer
 and the retrieved chunks (`ingest --rebuild` keeps them). `feedback` lists the 👎 ones (`--all`
@@ -335,6 +343,7 @@ uv run python main.py ask -v "Ani hangi ilde?"   # parçaları ve süreleri de g
 uv run python main.py ask --json "Ani hangi ilde?"   # cevap, kaynaklar ve süreler JSON olarak
 uv run python main.py search "Ani hangi ilde?"   # getirilen parçalar ve eşik, sohbet modeli yok
 uv run python main.py ask --refresh "Ani hangi ilde?"   # önbelleği atla, modele yeniden sor
+uv run python main.py ask --doc efes "Tiyatro kaç kişilik?"   # yalnızca bazı dokümanlarda ara
 uv run python main.py ask-batch sorular.txt --out cevaplar.jsonl   # satır başına bir soru
 uv run python main.py ingest --rebuild
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # internet gerekir
@@ -371,6 +380,14 @@ satırı yazıyor. Satırlar arasında konu taşınmıyor.
 `search` aramayı tek başına incelemek için: yalnızca embedding modelini yükleyip sohbet modeline
 gidecek parçaları, benzerliklerini, soruda tanıdığı alan adlarını ve sorunun eşiği geçip
 geçmediğini yazıyor. Kaç parça getirileceği `-k` ile değişiyor.
+
+`ask`, `search`, `ask-batch` ve `chat` için `--doc` aramayı bazı dokümanlarla sınırlıyor. Dosya adı
+(`efes.md` ya da `efes`), başlık (`"Nemrut Dağı"`) ya da takma ad (`Truva`) kabul ediyor; tekrar
+verilebiliyor ya da virgülle ayrılabiliyor, tanınmayan bir ad indeksteki dosyaların listesiyle
+birlikte hata veriyor. `chat` içinde `sadece efes, troya` kısıtı koyuyor, tek başına `sadece`
+kaldırıyor; web arayüzünde kenar çubuğundaki "Sadece şu alanlarda ara". Eşik yine geçerli, yani
+seçimin dışındaki bir alan sorulursa model çağrılmadan reddediliyor. Markdown ve JSON dışa aktarımı
+kısıtı da yazıyor.
 
 Her cevabın altında bir de 👍/👎 var. Oylar soru, cevap ve getirilen parçalarla birlikte aynı SQLite
 dosyasına yazılıyor (`ingest --rebuild` silmiyor). `feedback` 👎 verilenleri listeliyor (hepsi için
