@@ -271,9 +271,11 @@ def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
     print("Alan adı geçmeyen sorular önceki sorunun konusuyla sorulur; sıfırlamak için 'yeni' yazın.")
     print("Sohbeti Markdown olarak kaydetmek için 'kaydet [dosya.md]', son cevabın parçalarını "
           "tam okumak için 'kaynak [K2]' yazın.")
+    print("Aramayı bazı alanlarla sınırlamak için 'sadece efes, troya', kaldırmak için 'sadece' yazın.")
     save_history = _chat_history(CHAT_HISTORY)
     last: Answer | None = None
     turns: list[tuple[str, Answer]] = []
+    docs = _docs(assistant, args.doc)
     try:
         while True:
             try:
@@ -293,7 +295,16 @@ def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
             if command.lower() == "kaynak":
                 _show_chunks(turns[-1][1] if turns else None, target.strip())
                 continue
-            last = _answer_streaming(assistant, question, args.verbose, last)
+            if command.lower() == "sadece":
+                try:
+                    docs = _docs(assistant, [target])
+                except CommandError as err:
+                    print(err)
+                    continue
+                print(f"Yalnızca şu dokümanlarda aranıyor: {', '.join(sorted(docs))}" if docs
+                      else "Tüm dokümanlarda aranıyor.")
+                continue
+            last = _answer_streaming(assistant, question, args.verbose, last, docs=docs)
             turns.append((question, last))
     finally:
         save_history()
@@ -598,6 +609,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("chat", help="Etkileşimli soru-cevap döngüsü")
     p.add_argument("-v", "--verbose", action="store_true")
+    p.add_argument("--doc", action="append", metavar="AD",
+                   help="Yalnızca bu dokümanda ara (sohbette 'sadece' ile değiştirilebilir)")
     p.set_defaults(func=cmd_chat)
 
     p = sub.add_parser("calibrate", help="Benzerlik eşiğini test sorularından ölç")

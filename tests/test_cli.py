@@ -294,6 +294,17 @@ def test_chat_kaynak_prints_full_chunks_of_last_answer(chat, backend):
     assert "K1..K2 arasında bir parça yazın." in out
 
 
+def test_chat_sadece_limits_and_clears_the_search(chat, backend):
+    backend.reply = "Göbeklitepe 2018'de listeye girdi [K1]."
+    out = chat("sadece troya", "sadece efes", "Göbeklitepe hangi yıl listeye girdi?",
+               "sadece", "Göbeklitepe hangi yıl listeye girdi?", "çık")
+    assert "'troya' indekste yok." in out
+    assert "Yalnızca şu dokümanlarda aranıyor: efes.md" in out and "Tüm dokümanlarda aranıyor." in out
+    # Kısıtlıyken Göbeklitepe sorusu kapıda kalır, kaldırınca modele gider.
+    assert out.count("Bu bilgi elimdeki dokümanlarda yer almıyor.") == 1
+    assert len(backend.chat_calls) == 1
+
+
 def test_full_eval_runs_both_sets_without_the_answer_cache(run, eval_root, backend, store):
     import json
 
