@@ -326,3 +326,35 @@ def test_calibrate_and_tune_hybrid_print_suggestions(run, eval_root, backend):
     assert "Önerilen konu taşıma eşiği" in out and backend.chat_calls == []
     code, out, _ = run("tune-hybrid")
     assert code == 0 and "ağırlık" in out.splitlines()[0] and backend.chat_calls == []
+
+
+def test_serve_prints_address_and_stops_on_ctrl_c(run, monkeypatch):
+    seen = {}
+
+    class FakeServer:
+        server_address = ("127.0.0.1", 9999)
+
+        def serve_forever(self):
+            raise KeyboardInterrupt
+
+        def server_close(self):
+            seen["closed"] = True
+
+    def fake_make_server(assistant, host, port):
+        seen["args"] = (host, port)
+        return FakeServer()
+
+    monkeypatch.setattr(cli, "make_server", fake_make_server)
+    code, out, err = run("serve", "--port", "9999")
+    assert code == 0 and seen == {"args": ("127.0.0.1", 9999), "closed": True}
+    assert out.startswith("Miras API: http://127.0.0.1:9999") and "Uyarı" not in err
+    assert "ağdaki herkes erişebilir" in run("serve", "--host", "0.0.0.0")[2]
+
+
+def test_serve_reports_a_busy_port(run, monkeypatch):
+    def busy(*args):
+        raise OSError("Address already in use")
+
+    monkeypatch.setattr(cli, "make_server", busy)
+    code, _, err = run("serve")
+    assert code == 1 and "127.0.0.1:8765 dinlenemedi: Address already in use" in err

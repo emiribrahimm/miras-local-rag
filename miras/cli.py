@@ -1,5 +1,5 @@
 """Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, ask-batch, search, chat, eval,
-calibrate, feedback, status, config, docs, remove-doc, cache, compare-reports."""
+calibrate, feedback, status, config, docs, remove-doc, cache, compare-reports, serve."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from .feedback import eval_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import TITLE_BOOST, IndexError_, Retriever
+from .server import make_server
 from .store import Store
 from .wiki import WikiError, article, outdated, refreshed
 
@@ -558,6 +559,26 @@ def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
         print(f"Önbellekte {store.cache_size()} cevap var -> {settings.db_path}")
 
 
+def cmd_serve(args: argparse.Namespace, settings: Settings) -> None:
+    """Yerel HTTP API; istekler `ask --json` ile aynı biçimde cevaplanır (miras/server.py)."""
+    assistant = _assistant(settings)
+    try:
+        server = make_server(assistant, args.host, args.port)
+    except OSError as err:
+        raise CommandError(f"{args.host}:{args.port} dinlenemedi: {err}") from err
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        _status(f"Uyarı: {args.host} üzerinden ağdaki herkes erişebilir, kimlik doğrulama yok.")
+    host, port = server.server_address[:2]
+    print(f"Miras API: http://{host}:{port}  (POST /ask, POST /search, GET /docs, GET /health)")
+    print("Durdurmak için Ctrl+C.", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print()
+    finally:
+        server.server_close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="main.py", description="Miras: Foundry Local ile çalışan yerel RAG asistanı")
@@ -653,6 +674,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
     p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")
     p.set_defaults(func=cmd_cache)
+
+    p = sub.add_parser("serve", help="Yerel HTTP API başlat (POST /ask, /search; GET /docs, /health)")
+    p.add_argument("--host", default="127.0.0.1", help="Dinlenecek adres (varsayılan: yalnızca bu makine)")
+    p.add_argument("--port", type=int, default=8765, help="Port (varsayılan: 8765)")
+    p.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)
     overrides = {"chat_model": args.model, "chat_device": args.device}
