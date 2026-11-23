@@ -261,3 +261,24 @@ def test_document_chunks_can_be_inspected(app):
 
     app.sidebar.selectbox(key="inspect").set_value("efes.md").run()
     assert any("takma adlar: Ephesos, Ephesus" in c.value for c in app.sidebar.caption)
+
+
+def test_search_can_be_limited_from_the_sidebar(app):
+    app.sidebar.multiselect(key="only_docs").set_value(["efes.md"]).run()
+    assert not app.exception
+    app.chat_input[0].set_value("Göbeklitepe hangi yıl listeye girdi?").run()
+    assert app.chat_message[1].markdown[0].value == ABSTAIN_SENTENCE and app.fake.chat_calls == []
+    assert "🔎 Yalnızca şu dokümanlarda arandı: efes.md" in [c.value for c in app.chat_message[1].caption]
+
+    app.sidebar.multiselect(key="only_docs").set_value([]).run()
+    app.chat_input[0].set_value("Göbeklitepe hangi yıl listeye girdi?").run()
+    assert len(app.fake.chat_calls) == 1
+    assert not any("arandı" in c.value for c in app.chat_message[3].caption)
+
+
+def test_deleted_doc_drops_out_of_the_filter(app, settings):
+    app.sidebar.multiselect(key="only_docs").set_value(["efes.md", "gobeklitepe.md"]).run()
+    app.sidebar.selectbox[0].set_value("efes.md")
+    next(b for b in app.sidebar.button if b.label == "Sil").click().run()
+    assert not app.exception
+    assert app.sidebar.multiselect(key="only_docs").value == ["gobeklitepe.md"]

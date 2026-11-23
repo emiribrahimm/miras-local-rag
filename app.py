@@ -270,6 +270,8 @@ def render_sources(answer: Answer, show_all: bool) -> None:
                            f"({hit.chunk.filename}, CC BY-SA 4.0)")
     if answer.carried:
         st.caption(f"↪ Önceki sorudan devam: {', '.join(answer.carried)}")
+    if answer.docs:
+        st.caption(f"🔎 Yalnızca şu dokümanlarda arandı: {', '.join(answer.docs)}")
     if answer.cached:
         st.caption(f"⏱️ arama {answer.retrieval_seconds:.2f} sn · ⚡ önbellekten, model çağrılmadı")
     elif not answer.refused:
@@ -299,6 +301,11 @@ with st.sidebar:
     titles = {c.filename: c.title for c in assistant.retriever.chunks}
     filenames = sorted(titles, key=lambda f: (titles[f], f))
     st.markdown("\n".join(f"- {titles[f]} ({chunk_counts[f]} parça)" for f in filenames))
+    # Silinen doküman seçili kaldıysa çoklu seçim hata vermesin.
+    st.session_state.only_docs = [f for f in st.session_state.get("only_docs", []) if f in titles]
+    only_docs = st.multiselect("Sadece şu alanlarda ara", filenames, key="only_docs",
+                               format_func=lambda f: titles[f], placeholder="Tüm dokümanlar",
+                               help="Boş bırakılırsa tüm dokümanlarda aranır.")
     render_pending_changes(assistant)
     with st.form("upload", clear_on_submit=True):
         uploads = st.file_uploader("Doküman ekle", type=["md", "txt"], accept_multiple_files=True,
@@ -363,7 +370,8 @@ if question:
         try:
             with st.spinner("İlgili parçalar aranıyor..."):
                 # Son cevabın konusu, alan adı geçmeyen takip sorularına taşınır.
-                prepared = assistant.prepare(question, history[-1][1] if history else None)
+                prepared = assistant.prepare(question, history[-1][1] if history else None,
+                                             frozenset(only_docs) or None)
             started = time.perf_counter()
             raw = st.write_stream(assistant.generate(prepared, refresh=bool(regenerated)))
             answer = assistant.finalize(prepared, raw, time.perf_counter() - started)
