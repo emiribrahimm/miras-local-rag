@@ -216,3 +216,12 @@ def test_refresh_skips_cache_and_replaces_stored_answer(cached, backend, store):
     again = cached.ask("Efes nerede?")
     assert again.cached and again.text == "Efes İzmir'dedir [K1]."
     assert len(backend.chat_calls) == 2 and store.cache_size() == 1
+
+
+def test_topic_can_be_given_without_a_previous_answer(assistant, backend):
+    prepared = assistant.prepare("Peki ne zaman listeye girdi?", topic=("Göbeklitepe",))
+    assert prepared.carried == ("Göbeklitepe",)
+    assert prepared.question == "Göbeklitepe hakkında: Peki ne zaman listeye girdi?"
+    # Önceki cevap verilirse onun konusu geçerli.
+    first = assistant.ask("Efes nerede?")
+    assert assistant.prepare("Orası ne zaman yapılmış?", first, topic=("Göbeklitepe",)).carried == ("Efes",)

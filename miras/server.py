@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -45,6 +46,16 @@ def _docs(assistant: Assistant, body: dict) -> frozenset[str] | None:
         return assistant.retriever.resolve_docs(names)
     except ValueError as err:
         raise RequestError(HTTPStatus.BAD_REQUEST, str(err)) from err
+
+
+def _topic(assistant: Assistant, body: dict) -> tuple[str, ...]:
+    """Önceki cevabın `topic` alanı; yalnızca indeksteki alan başlıkları kabul edilir."""
+    topic = body.get("topic") or []
+    titles = {c.title for c in assistant.retriever.chunks}
+    if not isinstance(topic, list) or not all(isinstance(t, str) and t in titles for t in topic):
+        raise RequestError(HTTPStatus.BAD_REQUEST,
+                           "'topic' önceki cevabın topic alanı olmalı (indeksteki alan başlıkları).")
+    return tuple(topic)
 
 
 class Api:
@@ -93,10 +104,14 @@ class Api:
                 "retrieval_seconds": round(prepared.retrieval_seconds, 3)}
 
     def ask(self, body: dict) -> dict:
+        """Sunucu sohbet tutmaz: takip sorusu için son cevabın `topic` alanı geri gönderilir."""
         question = _question(body)
         with self.lock:
             docs = _docs(self.assistant, body)
-            answer = self.assistant.ask(question, refresh=bool(body.get("refresh")), docs=docs)
+            prepared = self.assistant.prepare(question, docs=docs, topic=_topic(self.assistant, body))
+            started = time.perf_counter()
+            raw = "".join(self.assistant.generate(prepared, refresh=bool(body.get("refresh"))))
+            answer = self.assistant.finalize(prepared, raw, time.perf_counter() - started)
         return answer_json(question, answer, self.assistant.settings)
 
 

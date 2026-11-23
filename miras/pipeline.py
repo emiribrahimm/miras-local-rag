@@ -83,8 +83,12 @@ class Assistant:
         self.cache = cache
 
     def prepare(self, question: str, previous: Answer | None = None,
-                docs: frozenset[str] | None = None) -> Prepared:
-        """`docs` verilirse (dosya adları, `Retriever.resolve_docs`) yalnızca onlarda aranır."""
+                docs: frozenset[str] | None = None, topic: tuple[str, ...] = ()) -> Prepared:
+        """`docs` verilirse (dosya adları, `Retriever.resolve_docs`) yalnızca onlarda aranır.
+
+        `topic` önceki cevap elde olmadan konu vermek içindir (HTTP API'de istemci son cevabın
+        `topic` alanını geri gönderir); `previous` verilirse onun konusu kullanılır.
+        """
         question = " ".join(question.split())[:MAX_QUESTION_CHARS]
         if not question:
             return Prepared(question, refusal_reason="empty")
@@ -97,10 +101,11 @@ class Assistant:
         # "Orası", "onun" gibi açık bir gönderme varsa benzerliğe bakılmaz; kısa sorular
         # embedding'de zayıf kalıp tabanın altına düşebiliyor.
         carried: tuple[str, ...] = ()
-        if (previous and previous.topic and not self.retriever.mentioned_titles(question)
+        topic = previous.topic if previous else tuple(topic)
+        if (topic and not self.retriever.mentioned_titles(question)
                 and (refers_back(question) or self.retriever.best_score(vector, docs or None)
                      >= self.settings.followup_min_similarity)):
-            carried = previous.topic
+            carried = topic
             question = f"{', '.join(carried)} hakkında: {question}"
             vector = self.backend.embed_query(question)
         hits = self.retriever.search(vector, self.settings.top_k, question, self.settings.bm25_weight,

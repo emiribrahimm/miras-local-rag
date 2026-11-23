@@ -70,7 +70,7 @@ def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
                for i, source in enumerate(answer_sources(answer))]
     return {"question": question, "answer": answer.text, "refused": answer.refused,
             "refusal_reason": answer.refusal_reason, "carried": list(answer.carried),
-            "docs": list(answer.docs),
+            "docs": list(answer.docs), "topic": list(answer.topic),
             "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
             "retrieval_seconds": round(answer.retrieval_seconds, 3),
             "generation_seconds": round(answer.generation_seconds, 3)}

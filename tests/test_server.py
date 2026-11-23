@@ -108,3 +108,16 @@ def test_method_size_and_model_errors(call, backend, monkeypatch):
     monkeypatch.setattr(backend, "stream_chat", broken)
     status, data = call("/ask", {"question": "Efes nerede?"})
     assert status == 503 and data["error"] == "Model yüklenemedi."
+
+
+def test_follow_up_carries_the_topic_sent_back_by_the_client(call, backend):
+    backend.reply = "Göbeklitepe Şanlıurfa'dadır [K1]."
+    first = call("/ask", {"question": "Göbeklitepe hangi ilde?"})[1]
+    assert first["topic"] == ["Göbeklitepe"]
+    follow = call("/ask", {"question": "Peki ne zaman listeye girdi?", "topic": first["topic"]})[1]
+    assert follow["carried"] == ["Göbeklitepe"]
+    assert "SORU: Göbeklitepe hakkında: Peki ne zaman" in backend.chat_calls[-1][1]["content"]
+    alone = call("/ask", {"question": "Peki ne zaman listeye girdi?"})[1]
+    assert alone["carried"] == []
+    status, data = call("/ask", {"question": "Peki?", "topic": ["Atlantis"]})
+    assert status == 400 and "'topic'" in data["error"]
