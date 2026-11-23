@@ -104,6 +104,21 @@ def test_keyword_weight_lifts_rare_terms_without_touching_scores(store, backend)
     assert hybrid[0].chunk.section == "Göbeklitepe › Koruma"  # "2018" yalnızca orada geçiyor
     assert {h.chunk.id: h.score for h in plain} == {h.chunk.id: h.score for h in hybrid}
 
+def test_each_named_site_gets_a_chunk_in_comparisons(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+    # Embedding yalnızca Göbeklitepe'yi gösteriyor; iki yer de onun parçalarına giderdi.
+    vector = backend.embed_query("Göbeklitepe Neolitik Şanlıurfa Dünya Mirası 2018")
+    single = retriever.search(vector, 2, "Göbeklitepe ne zaman listeye girdi?")
+    assert {h.chunk.filename for h in single} == {"gobeklitepe.md"}
+    both = retriever.search(vector, 2, "Göbeklitepe mi Efes mi listeye daha önce girdi?")
+    assert [h.chunk.filename for h in both] == ["gobeklitepe.md", "efes.md"]
+    # Skorlar ham benzerlik; sıralama yine skora göre.
+    assert both[0].score >= both[1].score
+    # Alan sayısı top_k'yı aşarsa en iyi alan kalır.
+    assert [h.chunk.filename for h in retriever.search(vector, 1, "Göbeklitepe ve Efes")] == [
+        "gobeklitepe.md"]
+
+
 def test_aliases_and_ascii_spellings_get_title_boost(store, backend):
     retriever = Retriever(store, backend.embed_model)
 

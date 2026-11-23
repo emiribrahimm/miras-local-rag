@@ -113,14 +113,28 @@ class Retriever:
                 if any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", folded) for key in keys)
                 or any(fuzzy_mentions(words, key) for key in keys)}
 
-    def _title_bonus(self, query: str) -> np.ndarray:
+    def _title_bonus(self, query: str, matched: set[str] | None = None) -> np.ndarray:
         """Soruda geçen alan adlarına ait parçalara TITLE_BOOST verir.
 
         "Ani" gibi kısa adlar embedding'de zayıf temsil ediliyor; bu, sorunun hangi
         alanla ilgili olduğunu açıkça söylediği durumda sıralamayı düzeltir.
         """
-        matched = self.mentioned_titles(query)
+        if matched is None:
+            matched = self.mentioned_titles(query)
         return np.where(np.isin(self._titles, list(matched)), TITLE_BOOST, 0.0)
+
+    def _one_per_title(self, order: np.ndarray, titles: set[str], limit: int) -> list[int]:
+        """Sıralamada her alanın ilk (en iyi) parçası; alan sayısı `limit`'i aşarsa en iyi alanlar."""
+        picked: list[int] = []
+        seen: set[str] = set()
+        for i in order:
+            title = self._titles[i]
+            if title in titles and title not in seen:
+                picked.append(int(i))
+                seen.add(title)
+                if len(picked) == limit:
+                    break
+        return picked
 
     def best_score(self, query_vector: np.ndarray) -> float:
         """Sorunun herhangi bir parçayla en yüksek ham kosinüs benzerliği."""
@@ -129,15 +143,23 @@ class Retriever:
     def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "",
                keyword_weight: float = 0.0) -> list[Hit]:
         """En iyi K parça. `keyword_weight` > 0 ise 0–1 ölçekli BM25 skoru da sıralamaya eklenir
-        (hibrit arama); tarih ve nadir özel isimlerde embedding'in kaçırdığını yakalar."""
+        (hibrit arama); tarih ve nadir özel isimlerde embedding'in kaçırdığını yakalar.
+
+        Soruda iki ya da daha fazla alan adı geçiyorsa ("Efes mi Troya mı daha eski?") her
+        alandan en az bir parça getirilir; yoksa en benzer alan bütün yerleri doldurabiliyor.
+        """
         # Vektörler normalize saklandığı için iç çarpım = kosinüs benzerliği.
         scores = self.matrix @ query_vector
         ranking = scores
+        matched: set[str] = set()
         if query_text:
-            ranking = ranking + self._title_bonus(query_text)
+            matched = self.mentioned_titles(query_text)
+            ranking = ranking + self._title_bonus(query_text, matched)
             if keyword_weight:
                 ranking = ranking + keyword_weight * self._bm25.scores(query_text)
         top_k = min(top_k, len(scores))
-        best = np.argpartition(-ranking, top_k - 1)[:top_k]
-        best = best[np.argsort(-ranking[best])]
+        order = np.argsort(-ranking, kind="stable")
+        picked = self._one_per_title(order, matched, top_k) if len(matched) > 1 else []
+        rest = [int(i) for i in order if i not in picked][:top_k - len(picked)]
+        best = sorted(picked + rest, key=lambda i: -ranking[i])
         return [Hit(self.chunks[i], float(scores[i])) for i in best]
