@@ -49,6 +49,17 @@ def _assistant(settings: Settings, cache: bool = True) -> Assistant:
                      cache=store if cache else None)
 
 
+def _docs(assistant: Assistant, values: list[str] | None) -> frozenset[str] | None:
+    """`--doc efes.md --doc Troya` ya da `--doc efes,troya` -> dosya adları; verilmezse None."""
+    names = [name.strip() for value in values or [] for name in value.split(",") if name.strip()]
+    if not names:
+        return None
+    try:
+        return assistant.retriever.resolve_docs(names)
+    except ValueError as err:
+        raise CommandError(str(err)) from err
+
+
 def _print_sources(answer: Answer, verbose: bool) -> None:
     if answer.refused:
         return
@@ -65,8 +76,9 @@ def _print_sources(answer: Answer, verbose: bool) -> None:
 
 
 def _answer_streaming(assistant: Assistant, question: str, verbose: bool,
-                      previous: Answer | None = None, refresh: bool = False) -> Answer:
-    prepared = assistant.prepare(question, previous)
+                      previous: Answer | None = None, refresh: bool = False,
+                      docs: frozenset[str] | None = None) -> Answer:
+    prepared = assistant.prepare(question, previous, docs)
     if prepared.carried:
         _status(f"konu: {', '.join(prepared.carried)}")
     started = time.perf_counter()
@@ -125,11 +137,13 @@ def cmd_update_wiki(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
+    assistant = _assistant(settings)
+    docs = _docs(assistant, args.doc)
     if args.json:
-        answer = _assistant(settings).ask(args.question, refresh=args.refresh)
+        answer = assistant.ask(args.question, refresh=args.refresh, docs=docs)
         print(json.dumps(answer_json(args.question, answer, settings), ensure_ascii=False, indent=2))
         return
-    _answer_streaming(_assistant(settings), args.question, args.verbose, refresh=args.refresh)
+    _answer_streaming(assistant, args.question, args.verbose, refresh=args.refresh, docs=docs)
 
 
 def cmd_ask_batch(args: argparse.Namespace, settings: Settings) -> None:
@@ -143,12 +157,13 @@ def cmd_ask_batch(args: argparse.Namespace, settings: Settings) -> None:
     if not questions:
         raise CommandError("Dosyada soru yok (boş ve # ile başlayan satırlar atlanır).")
     assistant = _assistant(settings)
+    docs = _docs(assistant, args.doc)
     out = args.out.open("w", encoding="utf-8") if args.out else sys.stdout
     try:
         for number, question in enumerate(questions, start=1):
             _status(f"{number}/{len(questions)} {question[:60]}")
             # Sorular birbirinden bağımsız; önceki satırın konusu taşınmaz.
-            answer = assistant.ask(question, refresh=args.refresh)
+            answer = assistant.ask(question, refresh=args.refresh, docs=docs)
             print(json.dumps(answer_json(question, answer, settings), ensure_ascii=False),
                   file=out, flush=True)
     finally:
@@ -166,9 +181,12 @@ def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
         except ValueError as err:
             raise CommandError(str(err)) from err
     assistant = _assistant(settings, cache=False)
-    prepared = assistant.prepare(args.question)
+    docs = _docs(assistant, args.doc)
+    prepared = assistant.prepare(args.question, docs=docs)
     if prepared.refusal_reason == "empty":
         raise CommandError("Bir soru yazın.")
+    if docs:
+        print(f"Yalnızca şu dokümanlarda aranıyor: {', '.join(sorted(docs))}")
     mentioned = assistant.retriever.mentioned_titles(prepared.question)
     if mentioned:
         quota = ", her alandan en az bir parça" if len(mentioned) > 1 else ""
@@ -555,18 +573,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="Cevabı ve kaynakları JSON olarak yaz (akış yok)")
     p.add_argument("--refresh", action="store_true",
                    help="Önbellekteki cevabı kullanma, modeli yeniden çağır ve önbelleği güncelle")
+    p.add_argument("--doc", action="append", metavar="AD",
+                   help="Yalnızca bu dokümanda ara (dosya adı, başlık ya da takma ad; tekrarlanabilir, "
+                        "virgülle de ayrılabilir)")
     p.set_defaults(func=cmd_ask)
 
     p = sub.add_parser("ask-batch", help="Dosyadaki soruları (satır başına bir) sor, JSONL yaz")
     p.add_argument("file", type=Path, help="Soru dosyası; - ise standart girdi")
     p.add_argument("--out", type=Path, metavar="DOSYA", help="Cevapları bu dosyaya yaz (varsayılan: ekran)")
     p.add_argument("--refresh", action="store_true", help="Önbelleği kullanma, modeli yeniden çağır")
+    p.add_argument("--doc", action="append", metavar="AD",
+                   help="Yalnızca bu dokümanda ara (dosya adı, başlık ya da takma ad; tekrarlanabilir, "
+                        "virgülle de ayrılabilir)")
     p.set_defaults(func=cmd_ask_batch)
 
     p = sub.add_parser("search", help="Soruya getirilen parçaları göster (sohbet modeli çağırmaz)")
     p.add_argument("question")
     p.add_argument("-k", type=int, help="Kaç parça getirilsin (varsayılan: top_k)")
     p.add_argument("--chars", type=int, default=200, help="Parça metninden gösterilecek karakter")
+    p.add_argument("--doc", action="append", metavar="AD",
+                   help="Yalnızca bu dokümanda ara (dosya adı, başlık ya da takma ad; tekrarlanabilir, "
+                        "virgülle de ayrılabilir)")
     p.set_defaults(func=cmd_search)
 
     p = sub.add_parser("chat", help="Etkileşimli soru-cevap döngüsü")

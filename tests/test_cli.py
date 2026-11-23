@@ -150,6 +150,19 @@ def test_ask_json_reports_refusal(run):
     assert data["refused"] is True and data["refusal_reason"] == "low_similarity"
 
 
+def test_doc_option_limits_ask_and_search(run, backend):
+    import json
+
+    backend.reply = "Efes Selçuk'tadır [K1]."
+    data = json.loads(run("ask", "--json", "--doc", "Ephesos", "Efes nerede?")[1])
+    assert {s["filename"] for s in data["sources"]} == {"efes.md"}
+    out = run("search", "Göbeklitepe nerede?", "--doc", "efes,efes.md")[1]
+    assert out.splitlines()[0] == "Yalnızca şu dokümanlarda aranıyor: efes.md"
+    assert "(gobeklitepe.md)" not in out
+    code, _, err = run("ask", "--doc", "Troya", "Troya nerede?")
+    assert code == 1 and "'Troya' indekste yok. Dokümanlar: efes.md, gobeklitepe.md" in err
+
+
 def test_ask_refresh_calls_model_again(run, backend):
     backend.reply = "Efes Ankara'dadır [K1]."
     run("ask", "Efes nerede?")
