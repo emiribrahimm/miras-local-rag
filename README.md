@@ -116,6 +116,7 @@ uv run python main.py docs                  # what's in the index
 uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index
 uv run python main.py cache --clear         # empty the answer cache
 uv run python main.py config                # effective settings and where each one comes from
+uv run python main.py serve                 # local HTTP API on 127.0.0.1:8765
 uv run pytest                               # no models needed, ~1s
 ```
 
@@ -133,6 +134,26 @@ given to the old answer is kept separately.
 `ask-batch` asks every line of a file as a separate question (empty lines and lines starting with
 `#` are skipped, `-` reads from stdin) and writes one JSON object per answer, in the same shape as
 `ask --json`. Questions don't carry topics from one line to the next.
+
+`serve` starts a small HTTP API (standard library only, no extra dependency) so other tools can use
+the assistant. It listens on `127.0.0.1:8765` by default (`--host`, `--port`); there's no
+authentication, so it warns when bound to anything other than localhost. Requests reach the model
+one at a time.
+
+```bash
+curl -s localhost:8765/ask -d '{"question": "Ani hangi ilde?"}'
+curl -s localhost:8765/ask -d '{"question": "Peki ne zaman yapılmış?", "topic": ["Ani"]}'
+curl -s localhost:8765/ask -d '{"question": "Tiyatro kaç kişilik?", "docs": ["efes"], "refresh": true}'
+curl -s localhost:8765/search -d '{"question": "Efes mi Troya mı daha eski?"}'
+curl -s localhost:8765/docs
+curl -s localhost:8765/health
+```
+
+`POST /ask` answers in the same shape as `ask --json`, plus `docs` and `topic`. The server keeps no
+conversation: to ask a follow-up, send back the `topic` of the previous answer. `POST /search`
+returns the chunks, their similarity, the site names it spotted and whether the question passes the
+threshold, without calling the chat model. Errors come back as `{"error": "..."}` with 400 (bad
+JSON, empty question, unknown document), 404/405, 413 (body over 64 KB) or 503 (model error).
 
 `search` is for looking at retrieval on its own: it loads only the embedding model and prints the
 chunks that would go to the chat model, their similarity, which site names it spotted in the
@@ -359,6 +380,7 @@ uv run python main.py docs                  # indeksteki dokümanlar
 uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil
 uv run python main.py cache --clear         # cevap önbelleğini boşalt
 uv run python main.py config                # geçerli ayarlar ve her birinin nereden geldiği
+uv run python main.py serve                 # 127.0.0.1:8765 üzerinde yerel HTTP API
 uv run pytest                               # model gerekmez, ~1 sn
 ```
 
@@ -376,6 +398,26 @@ cevabı değiştiriyor; eski cevaba verilen oy ayrı olarak kalıyor.
 `ask-batch` bir dosyanın her satırını ayrı bir soru olarak soruyor (boş ve `#` ile başlayan satırlar
 atlanıyor, `-` verilirse standart girdiden okuyor) ve her cevap için `ask --json` biçiminde bir JSON
 satırı yazıyor. Satırlar arasında konu taşınmıyor.
+
+`serve` başka araçlar da asistanı kullanabilsin diye küçük bir HTTP API başlatıyor (yalnızca
+standart kütüphane, ek bağımlılık yok). Varsayılan olarak `127.0.0.1:8765` dinliyor (`--host`,
+`--port`); kimlik doğrulama olmadığı için localhost dışında bir adrese bağlanınca uyarıyor. İstekler
+modele sırayla gidiyor.
+
+```bash
+curl -s localhost:8765/ask -d '{"question": "Ani hangi ilde?"}'
+curl -s localhost:8765/ask -d '{"question": "Peki ne zaman yapılmış?", "topic": ["Ani"]}'
+curl -s localhost:8765/ask -d '{"question": "Tiyatro kaç kişilik?", "docs": ["efes"], "refresh": true}'
+curl -s localhost:8765/search -d '{"question": "Efes mi Troya mı daha eski?"}'
+curl -s localhost:8765/docs
+curl -s localhost:8765/health
+```
+
+`POST /ask` cevabı `ask --json` biçiminde veriyor, ek olarak `docs` ve `topic` alanlarıyla. Sunucu
+sohbet tutmuyor; takip sorusu için önceki cevabın `topic` alanı geri gönderiliyor. `POST /search`
+sohbet modelini çağırmadan parçaları, benzerliklerini, tanıdığı alan adlarını ve sorunun eşiği geçip
+geçmediğini döndürüyor. Hatalar `{"error": "..."}` olarak geliyor: 400 (bozuk JSON, boş soru,
+bilinmeyen doküman), 404/405, 413 (64 KB'den büyük gövde) ya da 503 (model hatası).
 
 `search` aramayı tek başına incelemek için: yalnızca embedding modelini yükleyip sohbet modeline
 gidecek parçaları, benzerliklerini, soruda tanıdığı alan adlarını ve sorunun eşiği geçip
