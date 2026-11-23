@@ -25,6 +25,10 @@
   {"id": "a24", "type": "answerable", "split": "test", "doc": "pamukkale.md", "question": "Pamukkale hangi ilde yer alır?", "expected": [["Denizli"]]},
   {"id": "a25", "type": "answerable", "split": "dev",  "doc": "pamukkale.md", "question": "Pamukkale'de kaç adet sıcak su kaynağı bulunuyor?", "expected": [["17"]]},
   {"id": "a26", "type": "answerable", "split": "test", "doc": "ani.md", "question": "Ani'deki Meryemana Kilisesi'ni hangi mimar inşa etti?", "expected": [["Trdat"]]},
+  {"id": "m01", "type": "answerable", "split": "dev",  "doc": ["efes.md", "gobeklitepe.md"], "question": "Efes ile Göbeklitepe'den hangisi Dünya Mirası listesine daha önce girdi?", "expected": [["Efes"], ["2015"]]},
+  {"id": "m02", "type": "answerable", "split": "test", "doc": ["hattusa.md", "pamukkale.md"], "question": "Hattuşa ve Pamukkale UNESCO Dünya Mirası listesine hangi yıllarda girdi?", "expected": [["1986"], ["1988"]]},
+  {"id": "m03", "type": "answerable", "split": "dev",  "doc": ["selimiye-camii.md", "afrodisias.md"], "question": "Selimiye Camii mi Afrodisias mı Dünya Mirası olarak daha önce tescil edildi?", "expected": [["Selimiye"], ["2011"]]},
+  {"id": "m04", "type": "answerable", "split": "test", "doc": ["gobeklitepe.md", "nemrut-dagi.md"], "question": "Göbeklitepe ve Nemrut Dağı hangi illerde bulunuyor?", "expected": [["Şanlıurfa", "Urfa"], ["Adıyaman"]]},
 
   {"id": "n01", "type": "near_miss", "split": "dev",  "question": "Efes'e giriş ücreti ne kadar?"},
   {"id": "n02", "type": "near_miss", "split": "test", "question": "Sümela Manastırı hangi ilde bulunur?"},
