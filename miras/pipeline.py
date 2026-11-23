@@ -49,6 +49,7 @@ class Prepared:
     # Önceki turdan taşınan alan başlıkları; boş değilse `question` bunlarla bağlamlandırılmıştır.
     carried: tuple[str, ...] = ()
     cached: bool = False  # cevap model yerine önbellekten geldiyse `generate` doğru yapar
+    docs: tuple[str, ...] = ()  # arama bu dosyalarla sınırlandıysa (boş = hepsi)
 
 
 @dataclass
@@ -65,6 +66,7 @@ class Answer:
     cached: bool = False           # model çağrılmadı, ham cevap önbellekten geldi
     # Atıf yapılan parça indeksi -> parçada cevabı destekleyen cümleler (vurgulamak için).
     support: dict[int, list[str]] = field(default_factory=dict)
+    docs: tuple[str, ...] = ()     # arama bu dosyalarla sınırlandıysa (boş = hepsi)
 
     @property
     def sources(self) -> list[Hit]:
@@ -80,7 +82,9 @@ class Assistant:
         # Verilirse ham model cevapları bu veritabanında önbelleğe alınır (settings.answer_cache).
         self.cache = cache
 
-    def prepare(self, question: str, previous: Answer | None = None) -> Prepared:
+    def prepare(self, question: str, previous: Answer | None = None,
+                docs: frozenset[str] | None = None) -> Prepared:
+        """`docs` verilirse (dosya adları, `Retriever.resolve_docs`) yalnızca onlarda aranır."""
         question = " ".join(question.split())[:MAX_QUESTION_CHARS]
         if not question:
             return Prepared(question, refusal_reason="empty")
@@ -94,14 +98,15 @@ class Assistant:
         # embedding'de zayıf kalıp tabanın altına düşebiliyor.
         carried: tuple[str, ...] = ()
         if (previous and previous.topic and not self.retriever.mentioned_titles(question)
-                and (refers_back(question) or self.retriever.best_score(vector)
+                and (refers_back(question) or self.retriever.best_score(vector, docs or None)
                      >= self.settings.followup_min_similarity)):
             carried = previous.topic
             question = f"{', '.join(carried)} hakkında: {question}"
             vector = self.backend.embed_query(question)
-        hits = self.retriever.search(vector, self.settings.top_k, question, self.settings.bm25_weight)
+        hits = self.retriever.search(vector, self.settings.top_k, question, self.settings.bm25_weight,
+                                     only=docs or None)
         prepared = Prepared(question, hits, retrieval_seconds=time.perf_counter() - started,
-                            carried=carried)
+                            carried=carried, docs=tuple(sorted(docs or ())))
         # Benzerlik kapısı: ilgili parça yoksa modeli hiç çağırma, uydurma riskini sıfırla.
         if max(hit.score for hit in hits) < self.settings.min_similarity:
             prepared.refusal_reason = "low_similarity"
@@ -162,7 +167,7 @@ class Assistant:
         return Answer(text, reason is not None, reason, prepared.hits, cited,
                       prepared.retrieval_seconds, generation_seconds,
                       carried=prepared.carried, topic=self._topic(prepared, cited),
-                      cached=prepared.cached,
+                      cached=prepared.cached, docs=prepared.docs,
                       support=supporting_sentences(text, prepared.hits, cited) if cited else {})
 
     def _topic(self, prepared: Prepared, cited: list[int]) -> tuple[str, ...]:
@@ -174,8 +179,9 @@ class Assistant:
                 titles = cited_titles
         return tuple(sorted(titles))
 
-    def ask(self, question: str, previous: Answer | None = None, refresh: bool = False) -> Answer:
-        prepared = self.prepare(question, previous)
+    def ask(self, question: str, previous: Answer | None = None, refresh: bool = False,
+            docs: frozenset[str] | None = None) -> Answer:
+        prepared = self.prepare(question, previous, docs)
         started = time.perf_counter()
         raw = "".join(self.generate(prepared, refresh))
         return self.finalize(prepared, raw, time.perf_counter() - started)

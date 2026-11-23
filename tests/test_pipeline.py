@@ -66,6 +66,17 @@ def test_follow_up_question_carries_previous_topic(assistant, backend):
     assert "SORU: Göbeklitepe hakkında: Peki ne zaman listeye girdi?" in backend.chat_calls[-1][1]["content"]
 
 
+def test_question_can_be_limited_to_some_documents(assistant, backend):
+    backend.reply = "Efes Selçuk'tadır [K1]."
+    answer = assistant.ask("Efes nerede?", docs=frozenset({"efes.md"}))
+    assert {h.chunk.filename for h in answer.hits} == {"efes.md"}
+    assert answer.docs == ("efes.md",) and assistant.ask("Efes nerede?").docs == ()
+    # Kısıtın dışındaki alan sorulursa kapıda reddedilir, model çağrılmaz.
+    calls = len(backend.chat_calls)
+    refused = assistant.ask("Göbeklitepe hangi yıl listeye girdi?", docs=frozenset({"efes.md"}))
+    assert refused.refusal_reason == "low_similarity" and len(backend.chat_calls) == calls
+
+
 def test_naming_another_site_switches_topic(assistant, backend):
     first = assistant.ask("Göbeklitepe hangi ilde?")
     answer = assistant.ask("Efes nerede?", first)
@@ -129,7 +140,7 @@ def test_bm25_weight_from_settings_reaches_search(assistant, settings, monkeypat
     seen = []
     search = assistant.retriever.search
     monkeypatch.setattr(assistant.retriever, "search",
-                        lambda *args: seen.append(args[-1]) or search(*args))
+                        lambda *args, **kwargs: seen.append(args[-1]) or search(*args, **kwargs))
     assistant.settings = dataclasses.replace(settings, bm25_weight=0.3)
     assistant.ask("Efes nerede?")
     assert seen == [0.3]
