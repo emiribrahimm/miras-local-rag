@@ -54,6 +54,23 @@ def test_ask_can_be_limited_to_some_documents(call, backend):
     assert status == 400 and "'Troya' indekste yok" in data["error"]
 
 
+def test_search_shows_chunks_and_gate_without_chat_model(call, backend):
+    status, data = call("/search", {"question": "Göbeklitepe mi Efes mi daha eski?"})
+    assert status == 200 and backend.chat_calls == []
+    assert data["mentioned"] == ["Efes", "Göbeklitepe"] and data["passes_threshold"] is True
+    assert {h["filename"] for h in data["hits"]} == {"efes.md", "gobeklitepe.md"}
+    assert data["hits"][0]["label"] == "K1" and data["best_score"] == data["hits"][0]["score"]
+    data = call("/search", {"question": "Pizza hamuru tarifi nedir?"})[1]
+    assert data["passes_threshold"] is False and data["best_score"] < data["min_similarity"]
+
+
+def test_docs_lists_the_index(call):
+    status, data = call("/docs")
+    assert status == 200
+    assert [d["filename"] for d in data["docs"]] == ["efes.md", "gobeklitepe.md"]
+    assert data["docs"][0]["aliases"] == ["Ephesos", "Ephesus"] and data["docs"][1]["chunks"] == 2
+
+
 def test_bad_requests_get_a_json_error(call):
     assert call("/ask", b"{bozuk")[0] == 400
     status, data = call("/ask", {"question": "  "})

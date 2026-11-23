@@ -51,7 +51,9 @@ class Api:
         self.lock = threading.Lock()
         self.routes: dict[tuple[str, str], Callable[[dict], dict]] = {
             ("GET", "/health"): self.health,
+            ("GET", "/docs"): self.docs,
             ("POST", "/ask"): self.ask,
+            ("POST", "/search"): self.search,
         }
 
     def health(self, _body: dict) -> dict:
@@ -59,6 +61,32 @@ class Api:
         return {"status": "ok", "chat_model": a.backend.chat_model, "embed_model": a.backend.embed_model,
                 "docs": len({c.filename for c in a.retriever.chunks}), "chunks": len(a.retriever.chunks),
                 "top_k": a.settings.top_k, "min_similarity": a.settings.min_similarity}
+
+    def docs(self, _body: dict) -> dict:
+        """İndeksteki dokümanlar; `docs` alanına verilebilecek dosya adları ve takma adlar."""
+        found: dict[str, dict] = {}
+        for c in self.assistant.retriever.chunks:
+            doc = found.setdefault(c.filename, {"filename": c.filename, "title": c.title,
+                                                "aliases": list(c.aliases), "source_url": c.source_url,
+                                                "chunks": 0})
+            doc["chunks"] += 1
+        return {"docs": sorted(found.values(), key=lambda d: (d["title"], d["filename"]))}
+
+    def search(self, body: dict) -> dict:
+        """Modele gidecek parçalar ve kapının kararı; sohbet modeli çağrılmaz (`search` komutu gibi)."""
+        question = _question(body)
+        with self.lock:
+            docs = _docs(self.assistant, body)
+            prepared = self.assistant.prepare(question, docs=docs)
+            mentioned = self.assistant.retriever.mentioned_titles(prepared.question)
+        return {"question": prepared.question, "mentioned": sorted(mentioned), "docs": list(prepared.docs),
+                "best_score": round(max(h.score for h in prepared.hits), 3),
+                "min_similarity": self.assistant.settings.min_similarity,
+                "passes_threshold": prepared.refusal_reason is None,
+                "hits": [{"label": f"K{i}", "filename": h.chunk.filename, "section": h.chunk.section,
+                          "score": round(h.score, 3), "text": h.chunk.text}
+                         for i, h in enumerate(prepared.hits, start=1)],
+                "retrieval_seconds": round(prepared.retrieval_seconds, 3)}
 
     def ask(self, body: dict) -> dict:
         question = _question(body)
