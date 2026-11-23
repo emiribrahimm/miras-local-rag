@@ -39,9 +39,21 @@ def matches_expected(text: str, expected: list[list[str]]) -> bool:
     return all(any(normalize(variant) in lowered for variant in group) for group in expected)
 
 
-def _doc_rank(hits: list[Hit], doc: str) -> int | None:
-    """Beklenen dokümanın getirilen parçalar arasında ilk göründüğü sıra (1 tabanlı)."""
-    return next((i for i, h in enumerate(hits, 1) if h.chunk.filename == doc), None)
+def expected_docs(doc: str | list[str] | None) -> list[str]:
+    """Sorunun `doc` alanı: tek dosya adı ya da karşılaştırma sorularında birkaç tane."""
+    if doc is None:
+        return []
+    return [doc] if isinstance(doc, str) else list(doc)
+
+
+def _doc_rank(hits: list[Hit], doc: str | list[str]) -> int | None:
+    """Beklenen dokümanın getirilen parçalar arasında ilk göründüğü sıra (1 tabanlı).
+
+    Birkaç doküman bekleniyorsa hepsinin göründüğü sıra; biri eksikse None.
+    """
+    ranks = [next((i for i, h in enumerate(hits, 1) if h.chunk.filename == d), None)
+             for d in expected_docs(doc)]
+    return None if not ranks or None in ranks else max(ranks)
 
 
 def _score(q: dict, answer: Answer) -> tuple[bool, bool | None]:
@@ -50,8 +62,9 @@ def _score(q: dict, answer: Answer) -> tuple[bool, bool | None]:
         return answer.refused, None
     if answer.refused:
         return False, None
+    cited = {h.chunk.filename for h in answer.sources}
     return (matches_expected(answer.text, q["expected"]),
-            any(h.chunk.filename == q["doc"] for h in answer.sources))
+            all(doc in cited for doc in expected_docs(q["doc"])))
 
 
 # --- arama ---------------------------------------------------------------
@@ -221,7 +234,8 @@ class AnswerRow:
     cited_expected_doc: bool | None
     top_score: float
     seconds: float
-    doc: str | None = None  # cevaplanabilir sorularda cevabın bulunduğu doküman
+    # Cevaplanabilir sorularda cevabın bulunduğu doküman; karşılaştırma sorularında liste.
+    doc: str | list[str] | None = None
 
 
 def evaluate_answers(questions: list[dict], assistant: Assistant,
@@ -240,10 +254,14 @@ def evaluate_answers(questions: list[dict], assistant: Assistant,
 
 
 def by_doc(rows: list[AnswerRow]) -> dict[str, dict]:
-    """Cevaplanabilir sorular doküman bazında: hangi maddede zorlandığı genel skordan görünmüyor."""
+    """Cevaplanabilir sorular doküman bazında: hangi maddede zorlandığı genel skordan görünmüyor.
+
+    Karşılaştırma soruları andığı her dokümanın altında sayılır.
+    """
     result: dict[str, dict] = {}
-    for r in sorted((r for r in rows if r.type == "answerable" and r.doc), key=lambda r: r.doc):
-        d = result.setdefault(r.doc, {"passed": 0, "total": 0, "refused": 0, "cited": 0})
+    pairs = [(doc, r) for r in rows if r.type == "answerable" for doc in expected_docs(r.doc)]
+    for doc, r in sorted(pairs, key=lambda pair: pair[0]):
+        d = result.setdefault(doc, {"passed": 0, "total": 0, "refused": 0, "cited": 0})
         d["passed"] += r.passed
         d["total"] += 1
         d["refused"] += r.refused

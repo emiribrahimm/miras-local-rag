@@ -184,6 +184,30 @@ def test_report_breaks_answerable_questions_down_by_doc(assistant, backend, tmp_
     assert "| efes.md | 0/1 | 0 | 1 |" in md and "| gobeklitepe.md | 1/1 | 0 | 1 |" in md
 
 
+def test_comparison_questions_need_every_doc(assistant, backend):
+    from miras.evaluation import evaluate_retrieval
+    question = {"id": "m1", "type": "answerable", "split": "dev", "doc": ["efes.md", "gobeklitepe.md"],
+                "question": "Göbeklitepe mi Efes mi listeye daha önce girdi?", "expected": [["2018"]]}
+    rows = evaluate_retrieval([question], backend, assistant.retriever, 2)
+    assert rows[0].doc_rank == 2  # ikisi de ancak ikinci sırada birlikte görünüyor
+
+    backend.reply = "Göbeklitepe 2018'de girdi [K1], Efes ise [K2]."
+    both = evaluate_answers([question], assistant)[0]
+    backend.reply = "Göbeklitepe 2018'de girdi [K1]."
+    one = evaluate_answers([question], assistant)[0]
+    assert both.cited_expected_doc is True and one.cited_expected_doc is False
+    assert answer_summary([both])["by_doc"] == {
+        "efes.md": {"passed": 1, "total": 1, "refused": 0, "cited": 1},
+        "gobeklitepe.md": {"passed": 1, "total": 1, "refused": 0, "cited": 1}}
+
+
+def test_expected_docs_accepts_one_or_many():
+    from miras.evaluation import _doc_rank, expected_docs
+    assert expected_docs("efes.md") == ["efes.md"]
+    assert expected_docs(["efes.md", "ani.md"]) == ["efes.md", "ani.md"]
+    assert expected_docs(None) == [] and _doc_rank([], []) is None
+
+
 def _report(passed: dict[str, bool], **config) -> dict:
     rows = [{"id": i, "question": f"soru {i}", "answer": "cevap", "passed": ok}
             for i, ok in passed.items() if i.startswith("a")]
