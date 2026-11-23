@@ -119,6 +119,26 @@ def test_each_named_site_gets_a_chunk_in_comparisons(store, backend):
         "gobeklitepe.md"]
 
 
+def test_search_can_be_limited_to_some_documents(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+    vector = backend.embed_query("Göbeklitepe Neolitik Şanlıurfa")
+    only_efes = retriever.search(vector, 3, "Göbeklitepe nerede?", only=frozenset({"efes.md"}))
+    assert [h.chunk.filename for h in only_efes] == ["efes.md"]
+    assert retriever.best_score(vector, frozenset({"efes.md"})) < retriever.best_score(vector)
+    # Kota da kısıtın içinde kalır.
+    hits = retriever.search(vector, 2, "Göbeklitepe mi Efes mi?", only=frozenset({"gobeklitepe.md"}))
+    assert {h.chunk.filename for h in hits} == {"gobeklitepe.md"} and len(hits) == 2
+
+
+def test_resolve_docs_accepts_filenames_titles_and_aliases(store, backend):
+    retriever = Retriever(store, backend.embed_model)
+    assert retriever.resolve_docs(["efes.md"]) == {"efes.md"}
+    assert retriever.resolve_docs(["Ephesos", "gobeklitepe"]) == {"efes.md", "gobeklitepe.md"}
+    assert retriever.resolve_docs(["  EFES "]) == {"efes.md"}
+    with pytest.raises(ValueError, match="'Troya' indekste yok. Dokümanlar: efes.md, gobeklitepe.md"):
+        retriever.resolve_docs(["Troya"])
+
+
 def test_aliases_and_ascii_spellings_get_title_boost(store, backend):
     retriever = Retriever(store, backend.embed_model)
 

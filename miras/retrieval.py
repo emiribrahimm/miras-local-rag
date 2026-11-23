@@ -97,7 +97,30 @@ class Retriever:
         titles = [c.title for c in self.chunks]
         self._title_keys = {c.title: title_keys(c.title, c.aliases) for c in self.chunks}
         self._titles = np.array(titles, dtype=object)
+        self._filenames = np.array([c.filename for c in self.chunks], dtype=object)
         self._bm25 = BM25([f"{c.section}\n{c.text}" for c in self.chunks])
+
+    def resolve_docs(self, names: list[str]) -> frozenset[str]:
+        """Aramayı sınırlamak için verilen adları dosya adlarına çevirir.
+
+        Dosya adı ("efes.md", "efes"), başlık ("Nemrut Dağı") ya da takma ad ("Truva") olabilir;
+        Türkçe karaktersiz yazımlar da kabul edilir. Tanınmayan ad mevcut dokümanlarla birlikte
+        hata olarak bildirilir.
+        """
+        lookup: dict[str, str] = {}
+        for c in self.chunks:
+            forms = title_keys(c.title, c.aliases) | {c.filename, c.filename.rsplit(".", 1)[0]}
+            forms |= {_fold(c.title), _fold(c.title).translate(_ASCII)}
+            lookup.update({form: c.filename for form in forms})
+        resolved: set[str] = set()
+        for name in names:
+            folded = _fold(" ".join(name.split()))
+            match = lookup.get(folded) or lookup.get(folded.translate(_ASCII))
+            if match is None:
+                available = ", ".join(sorted(set(self._filenames)))
+                raise ValueError(f"'{name}' indekste yok. Dokümanlar: {available}")
+            resolved.add(match)
+        return frozenset(resolved)
 
     def mentioned_titles(self, query: str) -> set[str]:
         """Soruda adı geçen alanların başlıkları.
@@ -136,14 +159,20 @@ class Retriever:
                     break
         return picked
 
-    def best_score(self, query_vector: np.ndarray) -> float:
-        """Sorunun herhangi bir parçayla en yüksek ham kosinüs benzerliği."""
-        return float(np.max(self.matrix @ query_vector))
+    def best_score(self, query_vector: np.ndarray, only: frozenset[str] | None = None) -> float:
+        """Sorunun herhangi bir parçayla (`only` verilirse yalnızca o dokümanlarınkiyle) en
+        yüksek ham kosinüs benzerliği."""
+        scores = self.matrix @ query_vector
+        if only is not None:
+            scores = scores[np.isin(self._filenames, list(only))]
+        return float(np.max(scores))
 
     def search(self, query_vector: np.ndarray, top_k: int, query_text: str = "",
-               keyword_weight: float = 0.0) -> list[Hit]:
+               keyword_weight: float = 0.0, only: frozenset[str] | None = None) -> list[Hit]:
         """En iyi K parça. `keyword_weight` > 0 ise 0–1 ölçekli BM25 skoru da sıralamaya eklenir
         (hibrit arama); tarih ve nadir özel isimlerde embedding'in kaçırdığını yakalar.
+
+        `only` verilirse yalnızca bu dosya adlarına ait parçalar aranır.
 
         Soruda iki ya da daha fazla alan adı geçiyorsa ("Efes mi Troya mı daha eski?") her
         alandan en az bir parça getirilir; yoksa en benzer alan bütün yerleri doldurabiliyor.
@@ -157,8 +186,10 @@ class Retriever:
             ranking = ranking + self._title_bonus(query_text, matched)
             if keyword_weight:
                 ranking = ranking + keyword_weight * self._bm25.scores(query_text)
-        top_k = min(top_k, len(scores))
         order = np.argsort(-ranking, kind="stable")
+        if only is not None:
+            order = order[np.isin(self._filenames[order], list(only))]
+        top_k = min(top_k, len(order))
         picked = self._one_per_title(order, matched, top_k) if len(matched) > 1 else []
         rest = [int(i) for i in order if i not in picked][:top_k - len(picked)]
         best = sorted(picked + rest, key=lambda i: -ranking[i])
