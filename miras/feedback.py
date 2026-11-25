@@ -48,3 +48,25 @@ def eval_candidates(rows: list[dict]) -> list[dict]:
             candidate["carried"] = list(row["carried"])
         candidates.append(candidate)
     return candidates
+
+
+def refused_candidates(rows: list[dict]) -> list[dict]:
+    """Günlükte reddedilen soruları `questions.json` biçiminde aday olarak döndürür.
+
+    Reddetme doğru da olabilir (konu dışı soru) yanlış da (bilgi tabanında cevabı olan ya da
+    eklenmesi gereken bir konu); `type`, `doc` ve `expected` elle doldurulur. Aynı soru bir
+    kez alınır, en yeni kaydıyla.
+    """
+    latest: dict[tuple, dict] = {}
+    for row in rows:
+        if row["refusal_reason"]:
+            latest.setdefault((" ".join(row["question"].split()).lower(), row["carried"]), row)
+    candidates = []
+    for number, row in enumerate(sorted(latest.values(), key=lambda r: r["created"]), start=1):
+        candidate = {"id": f"lg{number:02d}", "type": TYPE_PLACEHOLDER, "split": "dev", "doc": "",
+                     "question": row["question"], "expected": [],
+                     "refusal_reason": row["refusal_reason"], "top_score": round(row["top_score"], 3)}
+        if row["carried"]:
+            candidate["carried"] = list(row["carried"])
+        candidates.append(candidate)
+    return candidates

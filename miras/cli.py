@@ -17,7 +17,7 @@ from . import evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ENV_FIELDS, ROOT, SETTINGS, Settings, env_name
 from .export import answer_json, conversation_markdown
-from .feedback import eval_candidates
+from .feedback import eval_candidates, refused_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
 from .retrieval import TITLE_BOOST, IndexError_, Retriever
@@ -512,6 +512,14 @@ def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
             extra.append("önbellekten")
         print(f"{when:%d.%m %H:%M}  {mark} {row['top_score']:.2f}  {row['question']}"
               + (f"  ({'; '.join(extra)})" if extra else ""))
+    if args.export:
+        candidates = refused_candidates(store.query_rows(refused=True))
+        args.export.parent.mkdir(parents=True, exist_ok=True)
+        args.export.write_text(json.dumps(candidates, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8")
+        print(f"\n{len(candidates)} aday -> {args.export}")
+        print("Cevabı dokümanlarda olanlar answerable (doc ve expected ile), olmayanlar near_miss ya da "
+              "out_of_domain olarak data/eval/questions.json'a eklenebilir.")
 
 
 def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
@@ -695,6 +703,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("log", help="Sorulan soruları ve reddedilenleri listele (model çağırmaz)")
     p.add_argument("-n", type=int, default=20, help="Kaç soru gösterilsin (varsayılan: 20)")
     p.add_argument("--refused", action="store_true", help="Yalnızca reddedilen sorular")
+    p.add_argument("--export", type=Path, metavar="DOSYA",
+                   help="Reddedilen soruları eval adayı olarak JSON'a yaz")
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")

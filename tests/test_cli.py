@@ -380,3 +380,13 @@ def test_log_lists_questions_and_refusals(run, backend, monkeypatch):
     refused = run("log", "--refused")[1].splitlines()
     assert len(refused) == 2 and "Pizza" in refused[1]
     assert len(run("log", "-n", "1")[1].splitlines()) == 2
+
+
+def test_log_export_writes_refused_candidates(run, tmp_path):
+    import json
+
+    run("ask", "Pizza hamuru tarifi nedir?")
+    target = tmp_path / "adaylar" / "log.json"
+    out = run("log", "--export", str(target))[1]
+    assert f"1 aday -> {target}" in out
+    assert json.loads(target.read_text(encoding="utf-8"))[0]["question"] == "Pizza hamuru tarifi nedir?"

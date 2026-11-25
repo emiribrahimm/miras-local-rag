@@ -40,3 +40,21 @@ def test_feedback_command_lists_and_exports(store, assistant, settings, tmp_path
         "Pizza hamuru tarifi nedir?"]
     assert cli.main(["feedback", "--all"]) == 0
     assert "Efes nerede?" in capsys.readouterr().out
+
+
+def test_refused_questions_become_eval_candidates():
+    from miras.feedback import TYPE_PLACEHOLDER, refused_candidates
+
+    def row(question, reason, created, carried=()):
+        return {"question": question, "refusal_reason": reason, "created": created,
+                "carried": carried, "top_score": 0.4123}
+
+    rows = [row("Efes'e giriş ücreti?", "model", 3), row("Pizza?", "low_similarity", 2),
+            row("efes'e  giriş ücreti?", "model", 1), row("Efes nerede?", None, 0),
+            row("Peki ücreti?", "model", 4, ("Efes",))]
+    candidates = refused_candidates(rows)
+    assert [c["question"] for c in candidates] == ["Pizza?", "Efes'e giriş ücreti?", "Peki ücreti?"]
+    assert candidates[0] == {"id": "lg01", "type": TYPE_PLACEHOLDER, "split": "dev", "doc": "",
+                             "question": "Pizza?", "expected": [], "refusal_reason": "low_similarity",
+                             "top_score": 0.412}
+    assert candidates[2]["carried"] == ["Efes"]
