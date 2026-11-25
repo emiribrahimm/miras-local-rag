@@ -362,3 +362,21 @@ def test_serve_reports_a_busy_port(run, monkeypatch):
     monkeypatch.setattr(cli, "make_server", busy)
     code, _, err = run("serve")
     assert code == 1 and "127.0.0.1:8765 dinlenemedi: Address already in use" in err
+
+
+def test_log_lists_questions_and_refusals(run, backend, monkeypatch):
+    assert run("log")[1] == "Günlükte soru yok.\n"
+    backend.reply = "Efes İzmir'dedir [K1]."
+    run("ask", "Efes nerede?")
+    run("ask", "--doc", "efes", "Efes nerede?")
+    run("ask", "Efes nerede?")
+    run("ask", "Pizza hamuru tarifi nedir?")
+    lines = run("log")[1].splitlines()
+    assert lines[0] == "Günlükte 4 soru, 1 tanesi reddedildi."
+    assert lines[1].endswith("Pizza hamuru tarifi nedir?  (kapıda reddedildi)") and " ✗ " in lines[1]
+    assert lines[2].endswith("Efes nerede?  (efes.md; önbellekten)")
+    assert lines[3].endswith("Efes nerede?  (sadece: efes.md; efes.md)")
+    assert lines[4].endswith("Efes nerede?  (efes.md)") and " ✓ " in lines[4]
+    refused = run("log", "--refused")[1].splitlines()
+    assert len(refused) == 2 and "Pizza" in refused[1]
+    assert len(run("log", "-n", "1")[1].splitlines()) == 2

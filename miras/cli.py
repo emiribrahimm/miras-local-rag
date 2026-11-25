@@ -1,5 +1,5 @@
 """Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, ask-batch, search, chat, eval,
-calibrate, feedback, status, config, docs, remove-doc, cache, compare-reports, serve."""
+calibrate, feedback, log, status, config, docs, remove-doc, cache, compare-reports, serve."""
 
 from __future__ import annotations
 
@@ -484,6 +484,36 @@ def cmd_feedback(args: argparse.Namespace, settings: Settings) -> None:
               "carried alanı olanlar takip sorusu (followups.json).")
 
 
+REFUSAL_LABELS = {"low_similarity": "kapıda reddedildi", "model": "model reddetti"}
+
+
+def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
+    """Soru günlüğü: neler soruldu, hangileri reddedildi (bilgi tabanındaki boşluklar)."""
+    store = Store(settings.db_path)
+    total, refused = store.query_counts()
+    if not total:
+        state = "" if settings.query_log else " (MIRAS_QUERY_LOG=0, günlük kapalı)"
+        print(f"Günlükte soru yok{state}.")
+        return
+    print(f"Günlükte {total} soru, {refused} tanesi reddedildi.")
+    for row in store.query_rows(refused=args.refused, limit=args.n):
+        when = datetime.fromtimestamp(row["created"])
+        mark = "✗" if row["refusal_reason"] else "✓"
+        extra = []
+        if row["carried"]:
+            extra.append(f"konu: {', '.join(row['carried'])}")
+        if row["docs"]:
+            extra.append(f"sadece: {', '.join(row['docs'])}")
+        if row["refusal_reason"]:
+            extra.append(REFUSAL_LABELS.get(row["refusal_reason"], row["refusal_reason"]))
+        elif row["cited"]:
+            extra.append(", ".join(row["cited"]))
+        if row["cached"]:
+            extra.append("önbellekten")
+        print(f"{when:%d.%m %H:%M}  {mark} {row['top_score']:.2f}  {row['question']}"
+              + (f"  ({'; '.join(extra)})" if extra else ""))
+
+
 def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
     docs, chunks = store.counts()
@@ -661,6 +691,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--export", type=Path, metavar="DOSYA",
                    help="Beğenilmeyen soruları eval adayı olarak JSON'a yaz")
     p.set_defaults(func=cmd_feedback)
+
+    p = sub.add_parser("log", help="Sorulan soruları ve reddedilenleri listele (model çağırmaz)")
+    p.add_argument("-n", type=int, default=20, help="Kaç soru gösterilsin (varsayılan: 20)")
+    p.add_argument("--refused", action="store_true", help="Yalnızca reddedilen sorular")
+    p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
     p.set_defaults(func=cmd_status)
