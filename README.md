@@ -38,7 +38,8 @@ A few things I added after looking at where it went wrong:
   pointing at chunks that weren't retrieved get dropped, so it can't invent a source.
 - Short names like "Ani" embed poorly, so if a site's name or alias shows up in the question its
   chunks get a small boost. Spellings without Turkish characters work too ("Gobeklitepe"), and
-  so do one-letter typos in longer names ("Göbeklitpe", "Selimye").
+  so do one-letter typos in longer names ("Göbeklitpe", "Selimye") and two-letter ones in names of
+  9 letters or more ("Gbeklitpe").
 - In the chat (CLI and web), a question that doesn't name any site is asked about the previous
   one's site: "Peki ne zaman yapılmış?" becomes "Selimiye Camii hakkında: Peki ne zaman
   yapılmış?". No extra model call, just a rule. Naming a site switches the topic; `yeni` in the
@@ -266,7 +267,7 @@ the scores before and after, and which questions got fixed or broken in between.
   still be missed. The 4 comparison questions in the eval set haven't been run on the real models
   yet.
 - Name matching is dictionary based. Short names (Ani, Efes, Troya) need to be spelled right, and
-  bigger typos like "Gbeklitpe" fall back to plain embedding search.
+  typos bigger than two letters ("Gbklitpe") fall back to plain embedding search.
 - Answers are only as good as the Wikipedia revisions in `data/docs/` (`update-wiki` brings them
   up to date, but the eval set was written against the current ones).
 
@@ -305,7 +306,8 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   Getirilmemiş bir parçaya işaret eden etiket metinden siliniyor, yani kaynak uyduramıyor.
 - "Ani" gibi kısa adlar embedding'de iyi temsil edilmiyor. Soruda bir alanın adı ya da takma adı
   geçiyorsa (`Truva`, `Ephesos`) o alanın parçaları biraz öne alınıyor. "Gobeklitepe" gibi Türkçe
-  karaktersiz yazımlar ve uzun adlardaki tek harflik hatalar ("Göbeklitpe", "Selimye") da tanınıyor.
+  karaktersiz yazımlar, uzun adlardaki tek harflik hatalar ("Göbeklitpe", "Selimye") ve 9 harf ve
+  üstü adlarda iki harflik hatalar ("Gbeklitpe") da tanınıyor.
 - Sohbette (CLI ve web) hiçbir alan adı geçmeyen soru bir önceki sorunun alanıyla soruluyor:
   "Peki ne zaman yapılmış?" sorusu "Selimiye Camii hakkında: Peki ne zaman yapılmış?" oluyor. Ek
   model çağrısı yok, basit bir kural. Başka bir alanın adı geçince konu değişiyor; CLI'da `yeni`,
@@ -532,8 +534,8 @@ ve sonraki skorları ve arada düzelen ya da bozulan soruları listeliyor.
   sıralamaya göre). Bir yıl ya da il için yetiyor, ama bir alanın cevabı sıralamada geride kalan bir
   parçadaysa yine kaçabilir. Değerlendirmedeki 4 karşılaştırma sorusu henüz gerçek modellerle
   çalıştırılmadı.
-- Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; "Gbeklitpe"
-  gibi daha büyük hatalarda sadece embedding araması kalıyor.
+- Ad eşleştirme sözlüğe dayalı. Kısa adların (Ani, Efes, Troya) doğru yazılması gerekiyor; iki
+  harften büyük hatalarda ("Gbklitpe") sadece embedding araması kalıyor.
 - Cevaplar `data/docs/` içindeki Vikipedi revizyonları kadar doğru (`update-wiki` onları
   güncelliyor, ama değerlendirme seti şu anki revizyonlara göre yazıldı).
 
