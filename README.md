@@ -116,6 +116,7 @@ uv run python main.py eval                  # run the question set, writes to re
 uv run python main.py eval --split dev      # only one half (or --ids a01,f03 for a few questions)
 uv run python main.py compare-reports reports/old.json reports/eval-qwen2.5-7b-cpu.json
 uv run python main.py feedback              # thumbs down answers from the web UI
+uv run python main.py log --refused         # questions that were refused, from every interface
 uv run python main.py status                # index, cache, votes, files not indexed yet
 uv run python main.py docs                  # what's in the index
 uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index
@@ -178,12 +179,20 @@ for everything), and `feedback --export reports/feedback-candidates.json` writes
 the right answer was a different one or a refusal, so `type` and `expected` are left to fill in;
 questions that carried a topic are marked with `carried` and belong in `followups.json`.
 
+Votes only cover answers someone bothered to rate, so every question is also logged (CLI, web UI
+and API, but not `eval`): the question as typed, the carried topic, the document filter, why it
+was refused if it was, the best similarity and which files were cited. Answer texts aren't kept.
+`log` shows the latest ones (`-n 50`), `log --refused` only the refusals, which is the quickest way
+to see what people ask that the documents don't cover, and `log --export reports/log-candidates.json`
+writes those in the `questions.json` format. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it
+off and `ingest --rebuild` leaves it alone.
+
 The tests use a fake backend instead of the models, so they also run on GitHub Actions on every
 push (Python 3.12 and 3.13, without the Foundry Local SDK).
 
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
-`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE` or `MIRAS_DOCS_DIR`. If you change the
+`MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_QUERY_LOG` or `MIRAS_DOCS_DIR`. If you change the
 embedding model you'll need `ingest --rebuild`. Values that don't make sense (`MIRAS_TOP_K=0`, a
 threshold above 1, a typo like `MIRAS_TOP_K=dört`) stop it at startup with a message naming the
 setting, instead of quietly breaking the search.
@@ -390,6 +399,7 @@ uv run python main.py eval                  # test setini çalıştır, reports/
 uv run python main.py eval --split dev      # yalnızca bir yarısı (birkaç soru için --ids a01,f03)
 uv run python main.py compare-reports reports/eski.json reports/eval-qwen2.5-7b-cpu.json
 uv run python main.py feedback              # web arayüzünde 👎 verilen cevaplar
+uv run python main.py log --refused         # reddedilen sorular, bütün arayüzlerden
 uv run python main.py status                # indeks, önbellek, oylar, indekslenmemiş dosyalar
 uv run python main.py docs                  # indeksteki dokümanlar
 uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil
@@ -453,11 +463,19 @@ biçiminde yazıyor; böylece test setine soru olarak eklenebiliyorlar. Oy, doğ
 cevap mı yoksa reddetmek mi olduğunu söylemediği için `type` ve `expected` elle dolduruluyor; konu
 taşınmış sorular `carried` alanıyla işaretli, onların yeri `followups.json`.
 
+Oylar yalnızca birinin değerlendirdiği cevapları kapsadığı için her soru ayrıca günlüğe yazılıyor
+(CLI, web arayüzü ve API; `eval` hariç): yazıldığı haliyle soru, taşınan konu, doküman kısıtı,
+reddedildiyse sebebi, en iyi benzerlik ve atıf yapılan dosyalar. Cevap metinleri saklanmıyor. `log`
+son soruları gösteriyor (`-n 50`), `log --refused` yalnızca reddedilenleri; dokümanların kapsamadığı
+ne sorulduğunu görmenin en hızlı yolu bu. `log --export reports/log-adaylar.json` bunları
+`questions.json` biçiminde yazıyor. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
+`ingest --rebuild` dokunmuyor.
+
 Testler modeller yerine sahte bir arka uç kullandığı için her push'ta GitHub Actions'ta da
 çalışıyor (Python 3.12 ve 3.13, Foundry Local SDK olmadan).
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
-`MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
+`MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_QUERY_LOG`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
 `ingest --rebuild` çalıştırmak gerekiyor. Anlamsız değerler (`MIRAS_TOP_K=0`, 1'den büyük bir eşik,
 `MIRAS_TOP_K=dört` gibi bir yazım hatası) aramayı sessizce bozmak yerine açılışta hangi ayarın
 hatalı olduğunu söyleyen bir mesajla durduruyor.
