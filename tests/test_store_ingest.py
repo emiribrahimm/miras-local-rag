@@ -331,3 +331,23 @@ def test_ingest_reports_progress_by_embedded_chunks(backend, settings, tmp_path)
            on_progress=messages.append, on_fraction=fractions.append)
     assert messages == ["efes.md: 1 parça gömülüyor (1/2)...", "gobeklitepe.md: 2 parça gömülüyor (2/2)..."]
     assert fractions == pytest.approx([1 / 3, 1.0])
+
+
+def test_query_log_keeps_newest_first_and_survives_rebuild(store, backend, settings, monkeypatch):
+    import miras.store
+    store.log_query("Efes nerede?", (), ("efes.md",), None, 0.81, ["efes.md"], False, "m")
+    store.log_query("Pizza?", (), (), "low_similarity", 0.12, [], False, "m")
+    store.log_query("Peki ne zaman?", ("Efes",), (), "model", 0.6, [], True, "m")
+    rows = store.query_rows()
+    assert [r["question"] for r in rows] == ["Peki ne zaman?", "Pizza?", "Efes nerede?"]
+    assert rows[0]["carried"] == ("Efes",) and rows[0]["cached"] is True
+    assert rows[2]["docs"] == ("efes.md",) and rows[2]["cited"] == ("efes.md",)
+    assert [r["question"] for r in store.query_rows(refused=True, limit=1)] == ["Peki ne zaman?"]
+    assert store.query_counts() == (3, 2)
+
+    ingest(store, backend, settings, rebuild=True)
+    assert store.query_counts() == (3, 2)
+    monkeypatch.setattr(miras.store, "MAX_LOGGED_QUERIES", 2)
+    store.log_query("Ani?", (), (), None, 0.7, [], False, "m")
+    assert [r["question"] for r in store.query_rows()] == ["Ani?", "Peki ne zaman?"]
+    assert store.clear_queries() == 2 and store.query_counts() == (0, 0)

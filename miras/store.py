@@ -44,10 +44,28 @@ CREATE TABLE IF NOT EXISTS feedback (
     sources        TEXT NOT NULL,      -- json: getirilen parçalar (dosya, bölüm, benzerlik, atıf)
     chat_model     TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS queries (
+    id             INTEGER PRIMARY KEY,
+    created        REAL NOT NULL,
+    question       TEXT NOT NULL,      -- kullanıcının yazdığı soru
+    carried        TEXT NOT NULL,      -- önceki turdan taşınan konu, virgülle ayrılmış
+    docs           TEXT NOT NULL,      -- arama bu dosyalarla sınırlandıysa, virgülle ayrılmış
+    refusal_reason TEXT,
+    top_score      REAL NOT NULL,      -- en iyi parçanın ham benzerliği
+    cited          TEXT NOT NULL,      -- atıf yapılan dosyalar, virgülle ayrılmış
+    cached         INTEGER NOT NULL,
+    chat_model     TEXT NOT NULL
+);
 """
 
 # Önbellekte tutulan en fazla cevap; aşılınca en eskiler silinir.
 MAX_CACHED_ANSWERS = 1000
+# Soru günlüğünde tutulan en fazla kayıt; aşılınca en eskiler silinir.
+MAX_LOGGED_QUERIES = 5000
+
+
+def _split(value: str) -> tuple[str, ...]:
+    return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
 @dataclass(frozen=True)
@@ -168,6 +186,44 @@ class Store:
             row["carried"] = tuple(t.strip() for t in row["carried"].split(",") if t.strip())
             row["sources"] = json.loads(row["sources"])
         return rows
+
+    # --- soru günlüğü -------------------------------------------------------
+    # Oylar gibi kullanıcı verisi: `clear()` (ingest --rebuild) bunlara dokunmaz.
+    def log_query(self, question: str, carried: tuple[str, ...], docs: tuple[str, ...],
+                  refusal_reason: str | None, top_score: float, cited: list[str], cached: bool,
+                  chat_model: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO queries(created, question, carried, docs, refusal_reason, top_score, "
+                "cited, cached, chat_model) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (time.time(), question, ", ".join(carried), ", ".join(docs), refusal_reason,
+                 top_score, ", ".join(cited), int(cached), chat_model))
+            self.conn.execute("DELETE FROM queries WHERE id NOT IN (SELECT id FROM queries "
+                              "ORDER BY id DESC LIMIT ?)", (MAX_LOGGED_QUERIES,))
+
+    def query_rows(self, refused: bool = False, limit: int | None = None) -> list[dict]:
+        """Günlükteki sorular, yeniden eskiye; `refused` ise yalnızca reddedilenler."""
+        query = ("SELECT created, question, carried, docs, refusal_reason, top_score, cited, cached, "
+                 "chat_model FROM queries")
+        if refused:
+            query += " WHERE refusal_reason IS NOT NULL"
+        cursor = self.conn.execute(query + " ORDER BY id DESC LIMIT ?", (-1 if limit is None else limit,))
+        names = [d[0] for d in cursor.description]
+        rows = [dict(zip(names, row)) for row in cursor]
+        for row in rows:
+            row["carried"], row["docs"], row["cited"] = (
+                _split(row["carried"]), _split(row["docs"]), _split(row["cited"]))
+            row["cached"] = bool(row["cached"])
+        return rows
+
+    def query_counts(self) -> tuple[int, int]:
+        """(günlükteki soru sayısı, reddedilenler)."""
+        return self.conn.execute(
+            "SELECT COUNT(*), COUNT(refusal_reason) FROM queries").fetchone()
+
+    def clear_queries(self) -> int:
+        with self.conn:
+            return self.conn.execute("DELETE FROM queries").rowcount
 
     # --- okuma ------------------------------------------------------------
     def counts(self) -> tuple[int, int]:
