@@ -12,13 +12,31 @@ from miras.server import make_server
 
 
 @pytest.fixture
-def call(assistant):
-    server = make_server(assistant, port=0)
-    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
-    thread.start()
+def start(assistant):
+    servers = []
+
+    def start(**options):
+        server = make_server(assistant, port=0, **options)
+        servers.append(server)
+        threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+        return _client(server)
+
+    yield start
+    for server in servers:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture
+def call(start):
+    return start()
+
+
+def _client(server):
     base = f"http://127.0.0.1:{server.server_address[1]}"
 
-    def call(path: str, body: dict | bytes | None = None, length: int | None = None) -> tuple[int, dict]:
+    def call(path: str, body: dict | bytes | None = None, length: int | None = None,
+             headers: dict | None = None) -> tuple[int, dict]:
         if length is not None:
             conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1])
             conn.putrequest("POST", path)
@@ -29,16 +47,15 @@ def call(assistant):
             conn.close()
             return result
         data = body if isinstance(body, bytes) or body is None else json.dumps(body).encode("utf-8")
-        request = urllib.request.Request(base + path, data=data, method="POST" if data is not None else "GET")
+        request = urllib.request.Request(base + path, data=data, method="POST" if data is not None else "GET",
+                                         headers=headers or {})
         try:
             with urllib.request.urlopen(request) as response:
                 return response.status, json.loads(response.read())
         except urllib.error.HTTPError as err:
             return err.code, json.loads(err.read())
 
-    yield call
-    server.shutdown()
-    server.server_close()
+    return call
 
 
 def test_health_reports_models_and_index(call):
@@ -121,3 +138,13 @@ def test_follow_up_carries_the_topic_sent_back_by_the_client(call, backend):
     assert alone["carried"] == []
     status, data = call("/ask", {"question": "Peki?", "topic": ["Atlantis"]})
     assert status == 400 and "'topic'" in data["error"]
+
+
+def test_token_protects_everything_but_health(start):
+    call = start(token="gizli")
+    assert call("/health")[0] == 200
+    status, data = call("/docs")
+    assert status == 401 and "Authorization: Bearer" in data["error"]
+    assert call("/docs", headers={"Authorization": "Bearer yanlis"})[0] == 401
+    assert call("/docs", headers={"Authorization": "Bearer gizli"})[0] == 200
+    assert call("/ask", {"question": "Efes nerede?"}, headers={"Authorization": "Bearer gizli"})[0] == 200

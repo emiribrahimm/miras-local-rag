@@ -6,6 +6,7 @@ istekler bir kilitle sırayla işlenir; uzun bir cevap üretilirken diğerleri b
 
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 import time
@@ -115,8 +116,16 @@ class Api:
         return answer_json(question, answer, self.assistant.settings)
 
 
-def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
-    """Henüz dinlemeye başlamamış sunucu; `serve_forever()` ile çalışır. `port=0` boş bir port seçer."""
+# Token verilse de açık kalan uç nokta; izleme araçları kimlik bilgisi olmadan bakabilsin.
+PUBLIC_PATHS = {"/health"}
+
+
+def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
+                token: str | None = None) -> ThreadingHTTPServer:
+    """Henüz dinlemeye başlamamış sunucu; `serve_forever()` ile çalışır. `port=0` boş bir port seçer.
+
+    `token` verilirse `/health` dışındaki istekler `Authorization: Bearer <token>` ister.
+    """
     api = Api(assistant)
 
     class Handler(BaseHTTPRequestHandler):
@@ -134,6 +143,9 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765)
         def _handle(self, method: str) -> None:
             path = self.path.split("?", 1)[0]
             try:
+                if token and path not in PUBLIC_PATHS and not self._authorized():
+                    raise RequestError(HTTPStatus.UNAUTHORIZED, "Geçerli bir 'Authorization: Bearer' "
+                                                                "başlığı gerekli.")
                 route = api.routes.get((method, path))
                 if route is None:
                     if any(p == path for _, p in api.routes):
@@ -146,6 +158,11 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765)
                 self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(err)})
             except Exception as err:  # sunucu tek bir bozuk istek yüzünden düşmesin
                 self._send(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(err).__name__}: {err}"})
+
+        def _authorized(self) -> bool:
+            given = self.headers.get("Authorization", "")
+            # Sabit süreli karşılaştırma: token karakter karakter tahmin edilemesin.
+            return hmac.compare_digest(given.encode("utf-8"), f"Bearer {token}".encode("utf-8"))
 
         def _body(self) -> dict:
             try:
@@ -170,6 +187,8 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765)
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
+            if status == HTTPStatus.UNAUTHORIZED:
+                self.send_header("WWW-Authenticate", 'Bearer realm="miras"')
             self.end_headers()
             self.wfile.write(data)
 

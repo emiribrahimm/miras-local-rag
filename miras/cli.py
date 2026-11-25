@@ -610,12 +610,14 @@ def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
 def cmd_serve(args: argparse.Namespace, settings: Settings) -> None:
     """Yerel HTTP API; istekler `ask --json` ile aynı biçimde cevaplanır (miras/server.py)."""
     assistant = _assistant(settings)
+    token = args.token or os.environ.get("MIRAS_API_TOKEN") or None
     try:
-        server = make_server(assistant, args.host, args.port)
+        server = make_server(assistant, args.host, args.port, token=token)
     except OSError as err:
         raise CommandError(f"{args.host}:{args.port} dinlenemedi: {err}") from err
-    if args.host not in ("127.0.0.1", "localhost", "::1"):
-        _status(f"Uyarı: {args.host} üzerinden ağdaki herkes erişebilir, kimlik doğrulama yok.")
+    if args.host not in ("127.0.0.1", "localhost", "::1") and not token:
+        _status(f"Uyarı: {args.host} üzerinden ağdaki herkes erişebilir, kimlik doğrulama yok "
+                "(--token ya da MIRAS_API_TOKEN).")
     host, port = server.server_address[:2]
     print(f"Miras API: http://{host}:{port}  (POST /ask, POST /search, GET /docs, GET /health)")
     print("Durdurmak için Ctrl+C.", flush=True)
@@ -734,6 +736,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("serve", help="Yerel HTTP API başlat (POST /ask, /search; GET /docs, /health)")
     p.add_argument("--host", default="127.0.0.1", help="Dinlenecek adres (varsayılan: yalnızca bu makine)")
     p.add_argument("--port", type=int, default=8765, help="Port (varsayılan: 8765)")
+    p.add_argument("--token", help="İsteklerde 'Authorization: Bearer <token>' iste "
+                                   "(varsayılan: MIRAS_API_TOKEN, yoksa kapalı)")
     p.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)

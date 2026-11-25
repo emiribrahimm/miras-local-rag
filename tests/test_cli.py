@@ -345,19 +345,25 @@ def test_serve_prints_address_and_stops_on_ctrl_c(run, monkeypatch):
         def server_close(self):
             seen["closed"] = True
 
-    def fake_make_server(assistant, host, port):
-        seen["args"] = (host, port)
+    def fake_make_server(assistant, host, port, **options):
+        seen["args"] = (host, port, options)
         return FakeServer()
 
     monkeypatch.setattr(cli, "make_server", fake_make_server)
+    monkeypatch.delenv("MIRAS_API_TOKEN", raising=False)
     code, out, err = run("serve", "--port", "9999")
-    assert code == 0 and seen == {"args": ("127.0.0.1", 9999), "closed": True}
+    assert code == 0 and seen["closed"] and seen["args"][:2] == ("127.0.0.1", 9999)
+    assert seen["args"][2]["token"] is None
     assert out.startswith("Miras API: http://127.0.0.1:9999") and "Uyarı" not in err
     assert "ağdaki herkes erişebilir" in run("serve", "--host", "0.0.0.0")[2]
+    # Token varken dışa açık adres uyarı vermez; ortam değişkeninden de okunur.
+    monkeypatch.setenv("MIRAS_API_TOKEN", "gizli")
+    assert "Uyarı" not in run("serve", "--host", "0.0.0.0")[2]
+    assert seen["args"][2]["token"] == "gizli"
 
 
 def test_serve_reports_a_busy_port(run, monkeypatch):
-    def busy(*args):
+    def busy(*args, **kwargs):
         raise OSError("Address already in use")
 
     monkeypatch.setattr(cli, "make_server", busy)
