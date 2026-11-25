@@ -17,7 +17,7 @@ from miras.export import conversation_json, conversation_markdown
 from miras.highlight import emphasize
 from miras.feedback import save_vote
 from miras.ingest import ingest, pending_changes, remove_document, save_uploads
-from miras.pipeline import Answer, Assistant
+from miras.pipeline import Answer, Assistant, changed_search
 from miras.retrieval import IndexError_, Retriever
 from miras.store import Store
 from miras.wiki import WikiError, WikiUpdate, article, outdated, refreshed
@@ -255,8 +255,9 @@ def render_sources(answer: Answer, show_all: bool) -> None:
         reason = ("İlgili doküman parçası bulunamadı; model çağrılmadı."
                   if answer.refusal_reason == "low_similarity"
                   else "İlgili parçalar bulundu ama cevap içlerinde yoktu.")
+        threshold = answer.search.get("min_similarity", SETTINGS.min_similarity)
         st.caption(f"🚫 {reason} (en yüksek benzerlik: {max(h.score for h in answer.hits):.2f}, "
-                   f"eşik: {SETTINGS.min_similarity})")
+                   f"eşik: {threshold})")
     indices = list(range(len(answer.hits))) if show_all or answer.refused else answer.cited
     if not answer.refused and not answer.cited:
         st.caption("⚠️ Model kaynak etiketi yazmadı; incelenen parçalar aşağıda.")
@@ -274,6 +275,9 @@ def render_sources(answer: Answer, show_all: bool) -> None:
         st.caption(f"↪ Önceki sorudan devam: {', '.join(answer.carried)}")
     if answer.docs:
         st.caption(f"🔎 Yalnızca şu dokümanlarda arandı: {', '.join(answer.docs)}")
+    changed = changed_search(answer, SETTINGS)
+    if changed:
+        st.caption("⚙️ Bu oturumun arama ayarları: " + ", ".join(f"{k} {v}" for k, v in changed.items()))
     if answer.cached:
         st.caption(f"⏱️ arama {answer.retrieval_seconds:.2f} sn · ⚡ önbellekten, model çağrılmadı")
     elif not answer.refused:

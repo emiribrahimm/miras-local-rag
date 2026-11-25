@@ -291,9 +291,13 @@ def test_search_settings_apply_to_this_session_only(app, settings):
     assert app.chat_message[1].markdown[0].value == ABSTAIN_SENTENCE and app.fake.chat_calls == []
     answer = app.session_state["history"][0][1]
     assert answer.search["min_similarity"] == 0.99 and answer.refusal_reason == "low_similarity"
+    captions = [c.value for c in app.chat_message[1].caption]
+    assert "eşik: 0.99)" in captions[0] and "⚙️ Bu oturumun arama ayarları: min_similarity 0.99" in captions
 
     app.sidebar.slider(key="min_similarity").set_value(settings.min_similarity)
     app.sidebar.slider(key="top_k").set_value(1).run()
     app.chat_input[0].set_value("Efes nerede?").run()
     answer = app.session_state["history"][1][1]
     assert len(answer.hits) == 1 and not answer.refused
+    assert any(c.value.endswith("top_k 1") for c in app.chat_message[3].caption)
+    assert not any("⚙️" in c.value for c in app.chat_message[1].caption if "top_k" in c.value)
