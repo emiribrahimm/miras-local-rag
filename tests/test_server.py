@@ -148,3 +148,38 @@ def test_token_protects_everything_but_health(start):
     assert call("/docs", headers={"Authorization": "Bearer yanlis"})[0] == 401
     assert call("/docs", headers={"Authorization": "Bearer gizli"})[0] == 200
     assert call("/ask", {"question": "Efes nerede?"}, headers={"Authorization": "Bearer gizli"})[0] == 200
+
+
+def _stream(call_base: str, body: dict) -> list[dict]:
+    request = urllib.request.Request(call_base + "/ask", data=json.dumps(body).encode("utf-8"),
+                                     method="POST")
+    with urllib.request.urlopen(request) as response:
+        assert response.headers["Content-Type"].startswith("application/x-ndjson")
+        return [json.loads(line) for line in response.read().decode("utf-8").splitlines()]
+
+
+def test_ask_can_stream_ndjson(assistant, backend):
+    server = make_server(assistant, port=0)
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        backend.reply = "Efes İzmir'dedir [K1, K9]."
+        lines = _stream(base, {"question": "Efes nerede?", "stream": True})
+        assert "".join(line["delta"] for line in lines[:-1]) == backend.reply
+        assert lines[-1]["done"] is True and lines[-1]["answer"] == "Efes İzmir'dedir [K1]."
+        refused = _stream(base, {"question": "Pizza hamuru tarifi nedir?", "stream": True})
+        assert refused[-1]["refusal_reason"] == "low_similarity" and len(backend.chat_calls) == 1
+
+        def broken(*args, **kwargs):
+            yield "Efes "
+            from miras.backends import BackendError
+            raise BackendError("Model yarıda kaldı.")
+
+        backend.stream_chat = broken
+        lines = _stream(base, {"question": "Efes hangi ilçede?", "stream": True})
+        assert lines == [{"delta": "Efes "}, {"error": "Model yarıda kaldı."}]
+        # Kilit bırakıldı; sıradaki istek cevaplanır.
+        assert _stream(base, {"question": "Pizza hamuru tarifi nedir?", "stream": True})[-1]["done"]
+    finally:
+        server.shutdown()
+        server.server_close()

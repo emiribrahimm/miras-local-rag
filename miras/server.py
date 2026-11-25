@@ -10,7 +10,7 @@ import hmac
 import json
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -65,7 +65,8 @@ class Api:
     def __init__(self, assistant: Assistant) -> None:
         self.assistant = assistant
         self.lock = threading.Lock()
-        self.routes: dict[tuple[str, str], Callable[[dict], dict]] = {
+        # Akış isteyen uç noktalar sözlük yerine satır satır yazılacak sözlükler üretir.
+        self.routes: dict[tuple[str, str], Callable[[dict], dict | Iterator[dict]]] = {
             ("GET", "/health"): self.health,
             ("GET", "/docs"): self.docs,
             ("POST", "/ask"): self.ask,
@@ -104,16 +105,34 @@ class Api:
                          for i, h in enumerate(prepared.hits, start=1)],
                 "retrieval_seconds": round(prepared.retrieval_seconds, 3)}
 
-    def ask(self, body: dict) -> dict:
-        """Sunucu sohbet tutmaz: takip sorusu için son cevabın `topic` alanı geri gönderilir."""
+    def ask(self, body: dict) -> dict | Iterator[dict]:
+        """Sunucu sohbet tutmaz: takip sorusu için son cevabın `topic` alanı geri gönderilir.
+
+        `"stream": true` ise cevap NDJSON olarak gelir: parça başına `{"delta": "..."}`, sonda
+        doğrulanmış cevapla `{"done": true, ...}`. Hatalı istekler akış başlamadan reddedilir.
+        """
         question = _question(body)
+        refresh = bool(body.get("refresh"))
         with self.lock:
             docs = _docs(self.assistant, body)
             prepared = self.assistant.prepare(question, docs=docs, topic=_topic(self.assistant, body))
+        if body.get("stream"):
+            return self._stream(question, prepared, refresh)
+        with self.lock:
             started = time.perf_counter()
-            raw = "".join(self.assistant.generate(prepared, refresh=bool(body.get("refresh"))))
+            raw = "".join(self.assistant.generate(prepared, refresh=refresh))
             answer = self.assistant.finalize(prepared, raw, time.perf_counter() - started)
         return answer_json(question, answer, self.assistant.settings)
+
+    def _stream(self, question: str, prepared, refresh: bool) -> Iterator[dict]:
+        with self.lock:
+            started = time.perf_counter()
+            pieces = []
+            for piece in self.assistant.generate(prepared, refresh=refresh):
+                pieces.append(piece)
+                yield {"delta": piece}
+            answer = self.assistant.finalize(prepared, "".join(pieces), time.perf_counter() - started)
+        yield {"done": True, **answer_json(question, answer, self.assistant.settings)}
 
 
 # Token verilse de açık kalan uç nokta; izleme araçları kimlik bilgisi olmadan bakabilsin.
@@ -151,7 +170,12 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
                     if any(p == path for _, p in api.routes):
                         raise RequestError(HTTPStatus.METHOD_NOT_ALLOWED, f"{path} için {method} kullanılmaz.")
                     raise RequestError(HTTPStatus.NOT_FOUND, f"{method} {path} yok.")
-                self._send(HTTPStatus.OK, route(self._body() if method == "POST" else {}))
+                result = route(self._body() if method == "POST" else {})
+                if isinstance(result, dict):
+                    self._send(HTTPStatus.OK, result)
+                else:
+                    self._send_lines(result)
+                    return
             except RequestError as err:
                 self._send(err.status, {"error": str(err)})
             except BackendError as err:
@@ -181,6 +205,26 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
             if not isinstance(body, dict):
                 raise RequestError(HTTPStatus.BAD_REQUEST, "Gövde bir JSON nesnesi olmalı.")
             return body
+
+        def _send_lines(self, lines: Iterator[dict]) -> None:
+            """NDJSON akışı; uzunluk baştan bilinmediği için bağlantı sonunda kapanır."""
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self.end_headers()
+            self.close_connection = True
+            try:
+                for line in lines:
+                    self.wfile.write(json.dumps(line, ensure_ascii=False).encode("utf-8") + b"\n")
+                    self.wfile.flush()
+            except BackendError as err:
+                # Başlıklar gitti; hata son satır olarak bildirilir.
+                self.wfile.write(json.dumps({"error": str(err)}, ensure_ascii=False).encode("utf-8") + b"\n")
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # istemci akışı yarıda bıraktı; üretilen kısım önbelleğe yazılmaz
+            finally:
+                close = getattr(lines, "close", None)
+                if close:
+                    close()  # yarıda kalan üreteç kilidi bıraksın
 
         def _send(self, status: HTTPStatus, payload: dict) -> None:
             data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
