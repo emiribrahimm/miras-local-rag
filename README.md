@@ -64,7 +64,9 @@ A few things I added after looking at where it went wrong:
   retrieved chunks) together with the model and generation settings, so asking the same thing
   again returns instantly, and changing a document, the prompt or the model just misses the cache.
   The raw output is stored and still goes through the citation checks. `eval` never uses it,
-  `ingest --rebuild` clears it and `MIRAS_ANSWER_CACHE=0` turns it off.
+  `ingest --rebuild` clears it and `MIRAS_ANSWER_CACHE=0` turns it off. The vectors of the last 256
+  questions are kept in memory as well, so a repeated question (or the same follow-up with its
+  topic) doesn't wait for the embedding model either.
 - Chunks are up to 1400 characters, so under each cited source the sentence that backs the answer
   is picked out: highlighted in the web UI, quoted in the Markdown export and printed with `»` in
   the CLI. Each answer sentence goes to the chunks its `[K1]` tags point at, and the chunk sentence
@@ -346,7 +348,8 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   ve getirilen parçalar) ile model ve üretim ayarları; yani aynı soru tekrar sorulunca cevap anında
   geliyor, doküman, prompt ya da model değişince de önbellek kendiliğinden ıskalıyor. Ham çıktı
   saklandığı için atıf kontrolleri yine çalışıyor. `eval` önbelleği kullanmıyor, `ingest --rebuild`
-  temizliyor, `MIRAS_ANSWER_CACHE=0` kapatıyor.
+  temizliyor, `MIRAS_ANSWER_CACHE=0` kapatıyor. Son 256 sorunun vektörleri de bellekte tutuluyor;
+  tekrar sorulan bir soru (ya da konusuyla aynı takip sorusu) embedding modelini de beklemiyor.
 - Parçalar 1400 karaktere kadar çıkabildiği için atıf yapılan her kaynağın altında cevabı
   destekleyen cümle ayrıca gösteriliyor: web arayüzünde vurgulu, Markdown dışa aktarımında alıntı,
   CLI'da `»` ile. Cevabın her cümlesi `[K1]` etiketinin gösterdiği parçaya bağlanıyor ve parçada
