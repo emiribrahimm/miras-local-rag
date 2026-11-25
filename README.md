@@ -89,8 +89,15 @@ ideally 16 GB of RAM. Internet is only needed the first time, to download the mo
 git clone https://github.com/emiribrahimm/miras-local-rag.git
 cd miras-local-rag
 uv sync
+uv run python main.py doctor   # optional: checks the setup without loading the models
 uv run python main.py ingest
 ```
+
+`doctor` checks the Python version, whether the Foundry Local SDK is installed, whether the models
+have been downloaded (and if not, whether there's room for them), the docs folder (files that
+aren't UTF-8), the index (missing, built with another embedding model, files not indexed yet) and
+settings that switch off a safeguard, like `MIRAS_MIN_SIMILARITY=0`. It exits with 1 if anything
+would stop the app from working.
 
 Models end up in `~/.miras-rag/cache/models/`. Indexing the 240 chunks took around 100 seconds on
 my machine (Apple M5 Pro). I've only tested it on macOS. On Windows, Foundry Local is supposed to be
@@ -385,8 +392,15 @@ gerek yok, `foundry-local-sdk` paketi çalışma zamanını içinde getiriyor.
 git clone https://github.com/emiribrahimm/miras-local-rag.git
 cd miras-local-rag
 uv sync
+uv run python main.py doctor   # isteğe bağlı: modelleri yüklemeden kurulumu denetler
 uv run python main.py ingest
 ```
+
+`doctor` Python sürümünü, Foundry Local SDK'nın kurulu olup olmadığını, modellerin inip inmediğini
+(inmediyse yer olup olmadığını), doküman klasörünü (UTF-8 olmayan dosyalar), indeksi (yok, başka bir
+embedding modeliyle kurulmuş, indekslenmemiş dosyalar) ve `MIRAS_MIN_SIMILARITY=0` gibi bir güvenlik
+önlemini kapatan ayarları denetliyor. Uygulamanın çalışmasını engelleyecek bir şey varsa 1 ile
+bitiyor.
 
 Modeller `~/.miras-rag/cache/models/` altına iniyor. 240 parçanın indekslenmesi benim makinemde
 (Apple M5 Pro) 100 saniye kadar sürdü. Sadece macOS'ta denedim. Windows'ta Foundry Local'in
