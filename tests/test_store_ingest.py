@@ -351,3 +351,17 @@ def test_query_log_keeps_newest_first_and_survives_rebuild(store, backend, setti
     store.log_query("Ani?", (), (), None, 0.7, [], False, "m")
     assert [r["question"] for r in store.query_rows()] == ["Ani?", "Peki ne zaman?"]
     assert store.clear_queries() == 2 and store.query_counts() == (0, 0)
+
+
+def test_html_documents_are_converted_and_indexed(store, backend, settings):
+    from miras.ingest import pending_changes
+    (settings.docs_dir / "ani.html").write_text(
+        "<html><head><title>Ani</title><script>x()</script></head><body><nav>Menü</nav>"
+        "<h1>Ani</h1><p>Ani Kars ilindedir.</p><h2>Kiliseler</h2><p>Meryemana Kilisesi.</p></body></html>",
+        encoding="utf-8")
+    assert pending_changes(store, settings).changed == ["ani.html"]
+    report = ingest(store, backend, settings)
+    assert report.added == ["ani.html"] and not pending_changes(store, settings)
+    chunks = [c for c in Retriever(store, backend.embed_model).chunks if c.filename == "ani.html"]
+    assert [c.section for c in chunks] == ["Ani", "Ani › Kiliseler"]
+    assert "Menü" not in " ".join(c.text for c in chunks) and "x()" not in chunks[0].text

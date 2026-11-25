@@ -10,9 +10,12 @@ from pathlib import Path
 from .backends import Backend
 from .chunking import chunk_document, parse_document
 from .config import Settings
+from .htmltext import html_to_markdown
 from .store import Store
 
-DOC_SUFFIXES = {".md", ".txt"}
+# HTML dosyaları parçalanmadan önce Markdown'a çevrilir; klasörde oldukları gibi kalırlar.
+HTML_SUFFIXES = {".html", ".htm"}
+DOC_SUFFIXES = {".md", ".txt"} | HTML_SUFFIXES
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
 
 
@@ -31,6 +34,13 @@ def _fingerprint(raw: str, settings: Settings) -> str:
     return hashlib.sha256(
         f"{settings.chunk_target_chars}|{settings.chunk_max_chars}|{raw}".encode("utf-8")
     ).hexdigest()
+
+
+def _document(path: Path, raw: str):
+    """Dosya metnini başlık ve bölümlerine ayırır; HTML önce Markdown'a çevrilir."""
+    if path.suffix.lower() in HTML_SUFFIXES:
+        raw = html_to_markdown(raw)
+    return parse_document(raw, fallback_title=path.stem)
 
 
 def _doc_files(docs_dir: Path) -> list[Path]:
@@ -69,7 +79,7 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
         if known.get(path.name) == fingerprint:
             report.unchanged.append(path.name)
             continue
-        doc = parse_document(raw, fallback_title=path.stem)
+        doc = _document(path, raw)
         chunks = chunk_document(doc, settings.chunk_target_chars, settings.chunk_max_chars)
         if not chunks:
             # Metni silinmiş dosyanın eski parçaları aramada kalmasın.
@@ -124,7 +134,7 @@ def pending_changes(store: Store, settings: Settings) -> PendingChanges:
         if known.get(path.name) == _fingerprint(raw, settings):
             continue
         if path.name not in known and not chunk_document(
-                parse_document(raw, path.stem), settings.chunk_target_chars, settings.chunk_max_chars):
+                _document(path, raw), settings.chunk_target_chars, settings.chunk_max_chars):
             continue
         changed.append(path.name)
     return PendingChanges(changed, sorted(set(known) - {p.name for p in files}))
