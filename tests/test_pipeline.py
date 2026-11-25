@@ -262,3 +262,17 @@ def test_questions_are_logged_with_their_outcome(assistant, backend, settings, s
 def test_assistant_without_a_store_logs_nothing(assistant, store):
     assistant.ask("Efes nerede?")
     assert store.query_counts() == (0, 0)
+
+
+def test_repeated_questions_reuse_the_query_vector(assistant, backend, monkeypatch):
+    import miras.pipeline
+    seen = []
+    embed = backend.embed_query
+    monkeypatch.setattr(backend, "embed_query", lambda text: seen.append(text) or embed(text))
+    assistant.ask("Efes nerede?")
+    assistant.ask("Efes nerede?")
+    assert seen == ["Efes nerede?"]
+    monkeypatch.setattr(miras.pipeline, "QUERY_VECTOR_CACHE", 1)
+    assistant.ask("Göbeklitepe nerede?")
+    assistant.ask("Efes nerede?")  # en eski atıldı, yeniden gömülür
+    assert seen == ["Efes nerede?", "Göbeklitepe nerede?", "Efes nerede?"]

@@ -6,8 +6,11 @@ import hashlib
 import json
 import re
 import time
+from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+
+import numpy as np
 
 from .backends import Backend, Message
 from .config import Settings
@@ -18,6 +21,8 @@ from .retrieval import _ASCII, Hit, Retriever, _fold
 from .store import Store
 
 MAX_QUESTION_CHARS = 1000
+# Bellekte tutulan en fazla sorgu vektörü; tekrar sorulan soru embedding modeline gitmez.
+QUERY_VECTOR_CACHE = 256
 
 # Önceki konuya açıkça gönderme yapan kelimeler ("orası", "oradaki", "onun", "hangisi").
 # Türkçe karaktersiz yazılır, soru da öyle katlanarak aranır. "oran", "oranı", "anı" gibi
@@ -82,6 +87,18 @@ class Assistant:
         # Verilirse ham model cevapları bu veritabanında önbelleğe alınır (settings.answer_cache)
         # ve sorular günlüğe yazılır (settings.query_log).
         self.cache = cache
+        self._vectors: OrderedDict[str, np.ndarray] = OrderedDict()
+
+    def _embed_query(self, text: str) -> np.ndarray:
+        """Sorgu vektörü; aynı metin yakın zamanda gömüldüyse bellekten (en eski atılır)."""
+        if text in self._vectors:
+            self._vectors.move_to_end(text)
+            return self._vectors[text]
+        vector = self.backend.embed_query(text)
+        self._vectors[text] = vector
+        if len(self._vectors) > QUERY_VECTOR_CACHE:
+            self._vectors.popitem(last=False)
+        return vector
 
     def prepare(self, question: str, previous: Answer | None = None,
                 docs: frozenset[str] | None = None, topic: tuple[str, ...] = ()) -> Prepared:
@@ -94,7 +111,7 @@ class Assistant:
         if not question:
             return Prepared(question, refusal_reason="empty")
         started = time.perf_counter()
-        vector = self.backend.embed_query(question)
+        vector = self._embed_query(question)
         # Takip sorusu: soruda hiçbir alan adı geçmiyorsa önceki turun konusu eklenir
         # ("Peki ne zaman yapılmış?" -> "Selimiye Camii hakkında: Peki ne zaman yapılmış?").
         # Bu metin hem aramada hem de modele giden soruda kullanılır. Soru tek başına hiçbir
@@ -112,7 +129,7 @@ class Assistant:
                      >= self.settings.followup_min_similarity)):
             carried = topic
             question = f"{', '.join(carried)} hakkında: {question}"
-            vector = self.backend.embed_query(question)
+            vector = self._embed_query(question)
         hits = self.retriever.search(vector, self.settings.top_k, question, self.settings.bm25_weight,
                                      only=docs or None)
         prepared = Prepared(question, hits, retrieval_seconds=time.perf_counter() - started,
