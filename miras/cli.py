@@ -612,7 +612,10 @@ def cmd_serve(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     token = args.token or os.environ.get("MIRAS_API_TOKEN") or None
     try:
-        server = make_server(assistant, args.host, args.port, token=token, cors_origin=args.cors)
+        on_request = None if args.quiet else (
+            lambda line: print(f"{datetime.now():%H:%M:%S} {line}", file=sys.stderr, flush=True))
+        server = make_server(assistant, args.host, args.port, token=token, cors_origin=args.cors,
+                             on_request=on_request)
     except OSError as err:
         raise CommandError(f"{args.host}:{args.port} dinlenemedi: {err}") from err
     if args.host not in ("127.0.0.1", "localhost", "::1") and not token:
@@ -740,6 +743,7 @@ def main(argv: list[str] | None = None) -> int:
                                    "(varsayılan: MIRAS_API_TOKEN, yoksa kapalı)")
     p.add_argument("--cors", metavar="ORIGIN",
                    help="Bu adresteki sayfalar tarayıcıdan çağırabilsin, ör. http://localhost:3000 ya da *")
+    p.add_argument("--quiet", action="store_true", help="İstekleri ekrana yazma")
     p.set_defaults(func=cmd_serve)
 
     args = parser.parse_args(argv)

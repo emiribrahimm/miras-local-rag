@@ -140,12 +140,13 @@ PUBLIC_PATHS = {"/health"}
 
 
 def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
-                token: str | None = None, cors_origin: str | None = None) -> ThreadingHTTPServer:
+                token: str | None = None, cors_origin: str | None = None,
+                on_request: Callable[[str], None] | None = None) -> ThreadingHTTPServer:
     """Henüz dinlemeye başlamamış sunucu; `serve_forever()` ile çalışır. `port=0` boş bir port seçer.
 
     `token` verilirse `/health` dışındaki istekler `Authorization: Bearer <token>` ister.
     `cors_origin` verilirse ("http://localhost:3000" ya da "*") o adresteki sayfalar tarayıcıdan
-    çağırabilir.
+    çağırabilir. `on_request` her istekten sonra "POST /ask 200 812 ms" gibi bir satırla çağrılır.
     """
     api = Api(assistant)
 
@@ -161,8 +162,13 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
         def do_POST(self) -> None:
             self._handle("POST")
 
+        def send_response(self, code: int, message: str | None = None) -> None:
+            self._status = int(code)
+            super().send_response(code, message)
+
         def do_OPTIONS(self) -> None:
             """Tarayıcının ön kontrol isteği; kimlik bilgisi taşımadığı için token aranmaz."""
+            started = time.perf_counter()
             self.send_response(HTTPStatus.NO_CONTENT)
             self._cors()
             if cors_origin:
@@ -171,6 +177,13 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
                 self.send_header("Access-Control-Max-Age", "600")
             self.send_header("Content-Length", "0")
             self.end_headers()
+            self._log_request("OPTIONS", started)
+
+        def _log_request(self, method: str, started: float) -> None:
+            if on_request:
+                path = self.path.split("?", 1)[0]
+                elapsed = (time.perf_counter() - started) * 1000
+                on_request(f"{method} {path} {getattr(self, '_status', 0)} {elapsed:.0f} ms")
 
         def _cors(self) -> None:
             if cors_origin:
@@ -179,6 +192,13 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
                     self.send_header("Vary", "Origin")
 
         def _handle(self, method: str) -> None:
+            started = time.perf_counter()
+            try:
+                self._respond(method)
+            finally:
+                self._log_request(method, started)
+
+        def _respond(self, method: str) -> None:
             path = self.path.split("?", 1)[0]
             try:
                 if token and path not in PUBLIC_PATHS and not self._authorized():

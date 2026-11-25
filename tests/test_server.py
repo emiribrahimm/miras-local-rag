@@ -3,6 +3,7 @@
 import http.client
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -198,3 +199,20 @@ def test_cors_headers_and_preflight(start):
     denied = _raw(call.port, "GET", "/docs")
     assert denied.status == 401 and denied.getheader("Access-Control-Allow-Origin") == "http://localhost:3000"
     assert _raw(start().port, "GET", "/health").getheader("Access-Control-Allow-Origin") is None
+
+
+def test_each_request_is_reported(start):
+    lines = []
+    call = start(on_request=lines.append, token="gizli")
+    call("/health")
+    call("/docs")
+    _raw(call.port, "OPTIONS", "/ask")
+    # Satır yanıt gönderildikten sonra yazılıyor; istemci ondan önce dönebilir.
+    for _ in range(200):
+        if len(lines) == 3:
+            break
+        time.sleep(0.01)
+    # İstekler ayrı iş parçacıklarında; satırların sırası garanti değil.
+    assert sorted(line.rsplit(" ", 2)[0] for line in lines) == ["GET /docs 401", "GET /health 200",
+                                                                "OPTIONS /ask 204"]
+    assert all(line.endswith(" ms") for line in lines)
