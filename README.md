@@ -218,11 +218,15 @@ embedding model you'll need `ingest --rebuild`. Values that don't make sense (`M
 threshold above 1, a typo like `MIRAS_TOP_K=dört`) stop it at startup with a message naming the
 setting, instead of quietly breaking the search.
 
+HTML files (`.html`, `.htm`, e.g. a saved web page) are converted to Markdown before chunking,
+with the standard library: the first `<h1>` (or `<title>`) becomes the title, `<h2>` and below
+become sections, and menus, scripts, headers and footers are dropped. The file itself stays as it is.
+
 Files have to be UTF-8 (Windows line endings are fine). One that isn't is skipped by `ingest` with
 a warning and its previous version stays in the index; a file emptied down to its header is taken
 out of the index.
 
-To use your own documents, drop `.md` or `.txt` files into `data/docs/` and run `ingest`, or
+To use your own documents, drop `.md`, `.txt` or `.html` files into `data/docs/` and run `ingest`, or
 upload them from the web UI sidebar ("Doküman ekle"), which saves them there and indexes them
 right away. Only changed files get re-embedded. "Doküman sil" in the same sidebar (or
 `remove-doc`) removes a file from `data/docs/` and the index (nothing to re-embed), as long as at
@@ -523,11 +527,15 @@ Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN
 `MIRAS_TOP_K=dört` gibi bir yazım hatası) aramayı sessizce bozmak yerine açılışta hangi ayarın
 hatalı olduğunu söyleyen bir mesajla durduruyor.
 
+HTML dosyaları (`.html`, `.htm`, ör. kaydedilmiş bir web sayfası) parçalanmadan önce standart
+kütüphaneyle Markdown'a çevriliyor: ilk `<h1>` (ya da `<title>`) başlık, `<h2>` ve altı bölüm
+oluyor; menüler, betikler, üst ve alt bilgiler atılıyor. Dosyanın kendisine dokunulmuyor.
+
 Dosyaların UTF-8 olması gerekiyor (Windows satır sonları sorun değil). UTF-8 olmayan bir dosyayı
 `ingest` uyarı vererek atlıyor ve önceki hali indekste kalıyor; üst bilgisi dışında boşaltılan bir
 dosya indeksten çıkarılıyor.
 
-Kendi dokümanlarınızla denemek için `.md` ya da `.txt` dosyalarını `data/docs/` klasörüne atıp
+Kendi dokümanlarınızla denemek için `.md`, `.txt` ya da `.html` dosyalarını `data/docs/` klasörüne atıp
 `ingest` çalıştırmanız ya da web arayüzünün kenar çubuğundan ("Doküman ekle") yüklemeniz yeterli.
 Yüklenen dosyalar aynı klasöre kaydedilip hemen indeksleniyor, sadece değişen dosyalar yeniden
 işleniyor. Aynı yerdeki "Doküman sil" (ya da `remove-doc`) bir dosyayı `data/docs/`'tan ve indeksten
