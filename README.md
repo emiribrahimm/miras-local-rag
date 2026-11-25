@@ -144,24 +144,31 @@ given to the old answer is kept separately.
 `ask --json`. Questions don't carry topics from one line to the next.
 
 `serve` starts a small HTTP API (standard library only, no extra dependency) so other tools can use
-the assistant. It listens on `127.0.0.1:8765` by default (`--host`, `--port`); there's no
-authentication, so it warns when bound to anything other than localhost. Requests reach the model
-one at a time.
+the assistant. It listens on `127.0.0.1:8765` by default (`--host`, `--port`). With `--token` (or
+`MIRAS_API_TOKEN`) every endpoint except `/health` needs `Authorization: Bearer <token>`; without
+one it warns when bound to anything other than localhost. `--cors http://localhost:3000` lets a
+page on that origin call it from the browser. Each request is printed to stderr with its status and
+duration (`--quiet` turns that off). Requests reach the model one at a time.
 
 ```bash
 curl -s localhost:8765/ask -d '{"question": "Ani hangi ilde?"}'
 curl -s localhost:8765/ask -d '{"question": "Peki ne zaman yapılmış?", "topic": ["Ani"]}'
 curl -s localhost:8765/ask -d '{"question": "Tiyatro kaç kişilik?", "docs": ["efes"], "refresh": true}'
 curl -s localhost:8765/search -d '{"question": "Efes mi Troya mı daha eski?"}'
-curl -s localhost:8765/docs
+curl -sN localhost:8765/ask -d '{"question": "Ani hangi ilde?", "stream": true}'
+curl -s localhost:8765/docs -H "Authorization: Bearer $MIRAS_API_TOKEN"
 curl -s localhost:8765/health
 ```
 
-`POST /ask` answers in the same shape as `ask --json`, plus `docs` and `topic`. The server keeps no
+`POST /ask` answers in the same shape as `ask --json`, plus `docs` and `topic`. With
+`"stream": true` it sends NDJSON instead: one `{"delta": "..."}` line per piece as the model writes,
+then `{"done": true, ...}` with the checked answer (citations cleaned, sources), or an `{"error": ...}`
+line if the model fails halfway. `/health` also reports the cached answers and logged questions. The server keeps no
 conversation: to ask a follow-up, send back the `topic` of the previous answer. `POST /search`
 returns the chunks, their similarity, the site names it spotted and whether the question passes the
 threshold, without calling the chat model. Errors come back as `{"error": "..."}` with 400 (bad
-JSON, empty question, unknown document), 404/405, 413 (body over 64 KB) or 503 (model error).
+JSON, empty question, unknown document), 401 (missing or wrong token), 404/405, 413 (body over
+64 KB) or 503 (model error).
 
 `search` is for looking at retrieval on its own: it loads only the embedding model and prints the
 chunks that would go to the chat model, their similarity, which site names it spotted in the
@@ -429,23 +436,32 @@ satırı yazıyor. Satırlar arasında konu taşınmıyor.
 
 `serve` başka araçlar da asistanı kullanabilsin diye küçük bir HTTP API başlatıyor (yalnızca
 standart kütüphane, ek bağımlılık yok). Varsayılan olarak `127.0.0.1:8765` dinliyor (`--host`,
-`--port`); kimlik doğrulama olmadığı için localhost dışında bir adrese bağlanınca uyarıyor. İstekler
-modele sırayla gidiyor.
+`--port`). `--token` (ya da `MIRAS_API_TOKEN`) verilirse `/health` dışındaki her uç nokta
+`Authorization: Bearer <token>` istiyor; token yoksa localhost dışında bir adrese bağlanınca
+uyarıyor. `--cors http://localhost:3000` o adresteki bir sayfanın tarayıcıdan çağırabilmesini
+sağlıyor. Her istek durum ve süresiyle stderr'e yazılıyor (`--quiet` kapatıyor). İstekler modele
+sırayla gidiyor.
 
 ```bash
 curl -s localhost:8765/ask -d '{"question": "Ani hangi ilde?"}'
 curl -s localhost:8765/ask -d '{"question": "Peki ne zaman yapılmış?", "topic": ["Ani"]}'
 curl -s localhost:8765/ask -d '{"question": "Tiyatro kaç kişilik?", "docs": ["efes"], "refresh": true}'
 curl -s localhost:8765/search -d '{"question": "Efes mi Troya mı daha eski?"}'
-curl -s localhost:8765/docs
+curl -sN localhost:8765/ask -d '{"question": "Ani hangi ilde?", "stream": true}'
+curl -s localhost:8765/docs -H "Authorization: Bearer $MIRAS_API_TOKEN"
 curl -s localhost:8765/health
 ```
 
-`POST /ask` cevabı `ask --json` biçiminde veriyor, ek olarak `docs` ve `topic` alanlarıyla. Sunucu
+`POST /ask` cevabı `ask --json` biçiminde veriyor, ek olarak `docs` ve `topic` alanlarıyla.
+`"stream": true` verilirse NDJSON gönderiyor: model yazdıkça parça başına bir `{"delta": "..."}`
+satırı, sonda da doğrulanmış cevapla (temizlenmiş atıflar, kaynaklar) `{"done": true, ...}`; model
+yarıda hata verirse son satır `{"error": ...}` oluyor. `/health` önbellekteki cevap ve günlükteki
+soru sayılarını da veriyor. Sunucu
 sohbet tutmuyor; takip sorusu için önceki cevabın `topic` alanı geri gönderiliyor. `POST /search`
 sohbet modelini çağırmadan parçaları, benzerliklerini, tanıdığı alan adlarını ve sorunun eşiği geçip
 geçmediğini döndürüyor. Hatalar `{"error": "..."}` olarak geliyor: 400 (bozuk JSON, boş soru,
-bilinmeyen doküman), 404/405, 413 (64 KB'den büyük gövde) ya da 503 (model hatası).
+bilinmeyen doküman), 401 (eksik ya da yanlış token), 404/405, 413 (64 KB'den büyük gövde) ya da 503
+(model hatası).
 
 `search` aramayı tek başına incelemek için: yalnızca embedding modelini yükleyip sohbet modeline
 gidecek parçaları, benzerliklerini, soruda tanıdığı alan adlarını ve sorunun eşiği geçip
