@@ -7,7 +7,7 @@ from datetime import datetime
 
 from .config import Settings
 from .feedback import answer_sources
-from .pipeline import Answer
+from .pipeline import Answer, changed_search
 
 
 def _sources(answer: Answer) -> tuple[list[str], bool]:
@@ -48,6 +48,9 @@ def conversation_markdown(history: list[tuple[str, Answer]], settings: Settings,
             parts += [f"↪ Önceki sorudan devam: {', '.join(answer.carried)}", ""]
         if answer.docs:
             parts += [f"🔎 Arama şu dokümanlarla sınırlıydı: {', '.join(answer.docs)}", ""]
+        changed = changed_search(answer, settings)
+        if changed:
+            parts += ["⚙️ Arama ayarları: " + ", ".join(f"{k} {v}" for k, v in changed.items()), ""]
         parts.append(answer.text)
         lines, linked = _sources(answer)
         any_linked |= linked
@@ -70,7 +73,7 @@ def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
                for i, source in enumerate(answer_sources(answer))]
     return {"question": question, "answer": answer.text, "refused": answer.refused,
             "refusal_reason": answer.refusal_reason, "carried": list(answer.carried),
-            "docs": list(answer.docs), "topic": list(answer.topic),
+            "docs": list(answer.docs), "topic": list(answer.topic), "search": dict(answer.search),
             "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
             "retrieval_seconds": round(answer.retrieval_seconds, 3),
             "generation_seconds": round(answer.generation_seconds, 3)}

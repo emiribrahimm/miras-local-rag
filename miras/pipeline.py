@@ -72,10 +72,26 @@ class Answer:
     # Atıf yapılan parça indeksi -> parçada cevabı destekleyen cümleler (vurgulamak için).
     support: dict[int, list[str]] = field(default_factory=dict)
     docs: tuple[str, ...] = ()     # arama bu dosyalarla sınırlandıysa (boş = hepsi)
+    # Cevabın arandığı ayarlar (top_k, min_similarity, bm25_weight); web arayüzünde oturuma göre değişir.
+    search: dict = field(default_factory=dict)
 
     @property
     def sources(self) -> list[Hit]:
         return [self.hits[i] for i in self.cited]
+
+
+SEARCH_FIELDS = ("top_k", "min_similarity", "bm25_weight")
+
+
+def search_settings(settings: Settings) -> dict:
+    """Aramayı belirleyen ayarlar; dışa aktarımda varsayılandan farklıysa gösterilir."""
+    return {name: getattr(settings, name) for name in SEARCH_FIELDS}
+
+
+def changed_search(answer: Answer, settings: Settings) -> dict:
+    """Cevabın aranırken kullandığı ayarlardan `settings`'tekinden farklı olanlar."""
+    defaults = search_settings(settings)
+    return {name: value for name, value in answer.search.items() if defaults.get(name) != value}
 
 
 class Assistant:
@@ -195,7 +211,8 @@ class Assistant:
                         prepared.retrieval_seconds, generation_seconds,
                         carried=prepared.carried, topic=self._topic(prepared, cited),
                         cached=prepared.cached, docs=prepared.docs,
-                        support=supporting_sentences(text, prepared.hits, cited) if cited else {})
+                        support=supporting_sentences(text, prepared.hits, cited) if cited else {},
+                        search=search_settings(self.settings))
         self._log(prepared, answer)
         return answer
 

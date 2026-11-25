@@ -83,3 +83,19 @@ def test_conversation_json_has_every_turn(assistant, backend, settings):
     assert data["created"] == "2026-10-26T14:05:00" and data["embed_model"] == settings.embed_model
     assert [t["question"] for t in data["turns"]] == ["Efes nerede?", "Pizza nasıl yapılır?"]
     assert data["turns"][0]["sources"][0]["cited"] is True and data["turns"][1]["refused"] is True
+
+
+def test_search_settings_are_exported_when_they_differ(assistant, backend, settings):
+    import dataclasses
+
+    from miras.export import answer_json
+
+    backend.reply = "Efes İzmir'dedir [K1]."
+    plain = assistant.ask("Efes nerede?")
+    assert answer_json("Efes nerede?", plain, settings)["search"] == {
+        "top_k": 2, "min_similarity": 0.2, "bm25_weight": 0.0}
+    assert "Arama ayarları" not in conversation_markdown([("Efes nerede?", plain)], settings, NOW)
+    assistant.settings = dataclasses.replace(settings, top_k=1, min_similarity=0.3)
+    tuned = assistant.ask("Efes nerede?")
+    text = conversation_markdown([("Efes nerede?", tuned)], settings, NOW)
+    assert "⚙️ Arama ayarları: top_k 1, min_similarity 0.3\n" in text
