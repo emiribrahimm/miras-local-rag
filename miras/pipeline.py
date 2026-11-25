@@ -100,12 +100,13 @@ class Assistant:
         # parçaya benzemiyorsa (konu dışı) konu taşınmaz: alan adı onu kapıdan geçirmesin.
         # "Orası", "onun" gibi açık bir gönderme varsa benzerliğe bakılmaz; kısa sorular
         # embedding'de zayıf kalıp tabanın altına düşebiliyor. Gönderme kelimesi olmayan kısa
-        # sorular ("Peki ne zaman yapılmış?") da bütün kelimeleri bilgi tabanında geçiyorsa
-        # taşınır; "pizza" gibi tek bir yabancı kelime bu yolu kapatır.
+        # sorular ("Peki ne zaman yapılmış?") da bütün kelimeleri konunun kendi dokümanında
+        # geçiyorsa taşınır; "pizza" gibi tek bir yabancı kelime bu yolu kapatır. Bütün bilgi
+        # tabanına bakmak yetmiyor: "Türk kahvesi" başka bir maddede geçiyor.
         carried: tuple[str, ...] = ()
         topic = previous.topic if previous else tuple(topic)
         if (topic and not self.retriever.mentioned_titles(question)
-                and (refers_back(question) or self.retriever.all_terms_known(question)
+                and (refers_back(question) or self.retriever.all_terms_known(question, topic)
                      or self.retriever.best_score(vector, docs or None)
                      >= self.settings.followup_min_similarity)):
             carried = topic

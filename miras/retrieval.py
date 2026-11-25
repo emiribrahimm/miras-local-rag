@@ -104,9 +104,11 @@ class Retriever:
         self._filenames = np.array([c.filename for c in self.chunks], dtype=object)
         self._bm25 = BM25([f"{c.section}\n{c.text}" for c in self.chunks])
 
-    def all_terms_known(self, query: str) -> bool:
-        """Sorunun bütün içerik kökleri bilgi tabanında geçiyor mu (bkz. `BM25.all_known`)."""
-        return self._bm25.all_known(query)
+    def all_terms_known(self, query: str, titles: tuple[str, ...] | None = None) -> bool:
+        """Sorunun bütün içerik kökleri bilgi tabanında (`titles` verilirse yalnızca o alanların
+        parçalarında) geçiyor mu; bkz. `BM25.all_known`."""
+        among = None if titles is None else np.isin(self._titles, list(titles))
+        return self._bm25.all_known(query, among)
 
     def resolve_docs(self, names: list[str]) -> frozenset[str]:
         """Aramayı sınırlamak için verilen adları dosya adlarına çevirir.

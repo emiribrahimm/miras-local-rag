@@ -137,6 +137,9 @@ def test_short_follow_up_in_known_words_carries_topic_below_floor(assistant, set
     assert assistant.ask("Peki hangi ilçesinde?", first).carried == ("Efes",)
     # Tek bir yabancı kelime yeterli: eşiğe kalır, eşik de geçilemez.
     assert assistant.ask("Peki ilçede kaç ziyaretçi var?", first).carried == ()
+    # Kelimeler bilgi tabanında geçse de konunun kendi dokümanında geçmeli.
+    gobekli = assistant.ask("Göbeklitepe hangi ilde?")
+    assert assistant.ask("Peki hangi ilçesinde?", gobekli).carried == ()
 
 
 def test_refers_back_with_site_name_switches_topic(assistant, backend):

@@ -48,15 +48,19 @@ class BM25:
         self._postings = {t: (np.array(ids), np.array(tfs, dtype=np.float32))
                           for t, (ids, tfs) in postings.items()}
 
-    def all_known(self, query: str) -> bool:
+    def all_known(self, query: str, among: np.ndarray | None = None) -> bool:
         """Sorgunun soru kelimeleri dışındaki bütün kökleri parçalarda geçiyor mu.
 
         "Peki ne zaman yapılmış?" gibi yalnızca bilgi tabanının kelimeleriyle kurulmuş kısa bir
         soru için doğru; "pizza", "python" gibi tek bir yabancı kök yanlış yapar. Hiç içerik
-        kelimesi yoksa ("Peki ne?") da yanlış.
+        kelimesi yoksa ("Peki ne?") da yanlış. `among` (parça başına True/False) verilirse
+        yalnızca o parçalara bakılır.
         """
         terms = tokenize(query)
-        return bool(terms) and all(term in self._postings for term in terms)
+        if among is None:
+            return bool(terms) and all(term in self._postings for term in terms)
+        return bool(terms) and all(term in self._postings and among[self._postings[term][0]].any()
+                                   for term in terms)
 
     def scores(self, query: str) -> np.ndarray:
         """Her parça için 0–1 aralığına ölçeklenmiş BM25 skoru (en iyi parça 1)."""

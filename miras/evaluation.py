@@ -152,9 +152,13 @@ def followup_floor_scores(followups: list[dict], questions: list[dict], backend:
     def best(text: str) -> float:
         return retriever.best_score(backend.embed_query(text))
 
+    def topic(q: dict) -> tuple[str, ...]:
+        docs = expected_docs(q.get("doc"))
+        return tuple({c.title for c in retriever.chunks if c.filename in docs})
+
     keep = [best(q["turns"][-1]) for q in followups
             if q["type"] == "answerable" and not q.get("switch") and not refers_back(q["turns"][-1])
-            and not retriever.all_terms_known(q["turns"][-1])]
+            and not retriever.all_terms_known(q["turns"][-1], topic(q))]
     block = ([best(q["question"]) for q in questions if q["type"] == "out_of_domain"]
              + [best(q["turns"][-1]) for q in followups if q["type"] == "out_of_domain"])
     return keep, block

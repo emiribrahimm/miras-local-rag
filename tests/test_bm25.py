@@ -31,3 +31,10 @@ def test_all_known_needs_every_content_stem_in_the_corpus():
     assert bm25.all_known("Peki hangi yılında yapılmış?") is True
     assert bm25.all_known("Peki pizza hangi yılında yapılır?") is False
     assert bm25.all_known("Peki ne?") is False  # içerik kelimesi yok
+
+
+def test_all_known_can_look_only_at_some_chunks():
+    bm25 = BM25(["Selimiye 1575 yılında yapılmıştır.", "Efes İzmir'de bir antik kenttir."])
+    assert bm25.all_known("Peki antik mi?") is True
+    assert bm25.all_known("Peki antik mi?", np.array([True, False])) is False
+    assert bm25.all_known("Peki antik mi?", np.array([False, True])) is True
