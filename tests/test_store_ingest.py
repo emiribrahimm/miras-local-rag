@@ -210,9 +210,11 @@ def test_save_uploads_writes_valid_files_and_reports_errors(tmp_path):
         (".gizli.md", b"x"),
         ("bos.md", b"  \n"),
         ("latin1.md", "Kars ilçesi".encode("latin-1")),
+        ("efes.HTML", "<h1>Efes</h1><p>İzmir'de.</p>".encode()),
     ])
-    assert saved == ["ani.md", "kaçak.txt"]
-    assert sorted(p.name for p in docs.iterdir()) == ["ani.md", "kaçak.txt"]
+    assert saved == ["ani.md", "kaçak.txt", "efes.HTML"]
+    assert sorted(p.name for p in docs.iterdir()) == ["ani.md", "efes.HTML", "kaçak.txt"]
+    assert errors[0] == "resim.png: yalnızca .md, .txt ve .html dosyaları eklenebilir."
     assert not (tmp_path / "kaçak.txt").exists()
     assert (docs / "kaçak.txt").read_text(encoding="utf-8") == "Metin"  # BOM atılır
     assert [e.split(":")[0] for e in errors] == ["resim.png", ".gizli.md", "bos.md", "latin1.md"]

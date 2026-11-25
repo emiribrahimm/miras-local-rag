@@ -63,7 +63,7 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
 
     files = _doc_files(settings.docs_dir)
     if not files:
-        raise FileNotFoundError(f"{settings.docs_dir} içinde .md/.txt doküman yok.")
+        raise FileNotFoundError(f"{settings.docs_dir} içinde .md/.txt/.html doküman yok.")
 
     known = store.fingerprints()
     report = IngestReport([], [], [], 0)
@@ -141,7 +141,7 @@ def pending_changes(store: Store, settings: Settings) -> PendingChanges:
 
 
 def _valid_doc_name(name: str) -> str | None:
-    """Klasör dışına çıkamayan, gizli olmayan bir .md/.txt dosya adı; uygun değilse None."""
+    """Klasör dışına çıkamayan, gizli olmayan bir .md/.txt/.html dosya adı; uygun değilse None."""
     filename = Path(name).name  # "../x.md" gibi yollar klasör dışına yazamasın
     if filename != name or filename.startswith(".") or Path(filename).suffix.lower() not in DOC_SUFFIXES:
         return None
@@ -169,7 +169,7 @@ def save_uploads(docs_dir: Path, uploads: list[tuple[str, bytes]]) -> tuple[list
     for name, data in uploads:
         filename = _valid_doc_name(Path(name).name)
         if filename is None:
-            errors.append(f"{name}: yalnızca .md ve .txt dosyaları eklenebilir.")
+            errors.append(f"{name}: yalnızca .md, .txt ve .html dosyaları eklenebilir.")
             continue
         if not data.strip():
             errors.append(f"{filename}: dosya boş.")

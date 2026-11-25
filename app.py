@@ -324,9 +324,11 @@ with st.sidebar:
                                help="Boş bırakılırsa tüm dokümanlarda aranır.")
     render_pending_changes(assistant)
     with st.form("upload", clear_on_submit=True):
-        uploads = st.file_uploader("Doküman ekle", type=["md", "txt"], accept_multiple_files=True,
+        uploads = st.file_uploader("Doküman ekle", type=["md", "txt", "html", "htm"],
+                                   accept_multiple_files=True,
                                    help="Başlık ve takma adlar için dosyanın başına README'deki "
-                                        "üst bilgi eklenebilir; yoksa dosya adı başlık olur.")
+                                        "üst bilgi eklenebilir; yoksa dosya adı başlık olur. "
+                                        "HTML'de başlık ilk <h1>'den gelir, menüler atılır.")
         if st.form_submit_button("İndeksle") and uploads:
             index_uploads(assistant, [(f.name, f.getvalue()) for f in uploads])
     with st.form("wiki", clear_on_submit=True):

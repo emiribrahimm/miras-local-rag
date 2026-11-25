@@ -55,7 +55,7 @@ def check_docs(settings: Settings) -> list[Check]:
         return [Check("error", "dokümanlar", f"{settings.docs_dir} yok (MIRAS_DOCS_DIR).")]
     files = _doc_files(settings.docs_dir)
     if not files:
-        return [Check("error", "dokümanlar", f"{settings.docs_dir} içinde .md/.txt dosya yok.")]
+        return [Check("error", "dokümanlar", f"{settings.docs_dir} içinde .md/.txt/.html dosya yok.")]
     unreadable = []
     for path in files:
         try:
