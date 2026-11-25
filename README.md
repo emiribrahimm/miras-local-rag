@@ -123,6 +123,7 @@ uv run python main.py calibrate             # re-measure the similarity threshol
 uv run python main.py tune-hybrid           # measure the BM25 weight for hybrid search
 uv run python main.py eval                  # run the question set, writes to reports/
 uv run python main.py eval --split dev      # only one half (or --ids a01,f03 for a few questions)
+uv run python main.py eval --retrieval-only # search and threshold only, no chat model, seconds
 uv run python main.py compare-reports reports/old.json reports/eval-qwen2.5-7b-cpu.json
 uv run python main.py feedback              # thumbs down answers from the web UI
 uv run python main.py log --refused         # questions that were refused, from every interface
@@ -291,6 +292,13 @@ just the ones being worked on; both write to a separate report (`...-dev`, `...-
 full one isn't overwritten. `compare-reports old.json new.json` lists the settings that changed,
 the scores before and after, and which questions got fixed or broken in between.
 
+A full `eval` takes around ten minutes on CPU, most of it in the chat model. `eval
+--retrieval-only` skips it and only loads the embedding model: the right document at rank 1 and in
+the top k, MRR, whether the answer is in the retrieved chunks, a table per document, what the
+threshold would let through or stop, and for the follow-up set whether the topic was carried. It
+writes `reports/arama-<embedding model>.md/.json` and takes the same `--split` and `--ids`. That's
+the quick check after changing chunking, `top_k`, the BM25 weight or the follow-up rules.
+
 ## Limitations
 
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit (repeated questions come from the cache). There's a GPU option
@@ -430,6 +438,7 @@ uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
 uv run python main.py tune-hybrid           # hibrit arama için BM25 ağırlığını ölç
 uv run python main.py eval                  # test setini çalıştır, reports/ altına yazar
 uv run python main.py eval --split dev      # yalnızca bir yarısı (birkaç soru için --ids a01,f03)
+uv run python main.py eval --retrieval-only # yalnızca arama ve eşik, sohbet modeli yok, saniyeler
 uv run python main.py compare-reports reports/eski.json reports/eval-qwen2.5-7b-cpu.json
 uv run python main.py feedback              # web arayüzünde 👎 verilen cevaplar
 uv run python main.py log --refused         # reddedilen sorular, bütün arayüzlerden
@@ -598,6 +607,13 @@ yaparken `eval --split dev` test sorularını görmeden çalıştırıyor, `eval
 üzerinde çalışılan soruları yeniden soruyor; ikisi de ayrı bir rapora yazıyor (`...-dev`,
 `...-secili`), tam rapor ezilmiyor. `compare-reports eski.json yeni.json` değişen ayarları, önceki
 ve sonraki skorları ve arada düzelen ya da bozulan soruları listeliyor.
+
+Tam bir `eval` CPU'da on dakika kadar sürüyor, çoğu sohbet modelinde geçiyor. `eval
+--retrieval-only` onu atlayıp yalnızca embedding modelini yüklüyor: doğru dokümanın 1. sırada ve
+ilk k içinde olması, MRR, cevabın getirilen parçalarda olup olmadığı, doküman bazında tablo, eşiğin
+neyi geçirip neyi durduracağı ve takip setinde konunun taşınıp taşınmadığı. `reports/arama-<embedding
+modeli>.md/.json` dosyasına yazıyor, `--split` ve `--ids` de çalışıyor. Parçalamayı, `top_k`'yı,
+BM25 ağırlığını ya da takip kurallarını değiştirdikten sonra hızlı kontrol için bu.
 
 ### Eksikler
 
