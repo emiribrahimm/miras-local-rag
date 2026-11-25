@@ -34,6 +34,7 @@ def test_status_reports_index_and_pending_changes(run, settings):
     assert code == 0
     assert "İndeks: 2 doküman, 3 parça (fake-hash-embedding)" in out
     assert "ile indeks aynı" in out
+    assert "Soru günlüğü: 0 soru, 0 reddedildi" in out
     (settings.docs_dir / "ani.md").write_text("# Ani\n\nKars ilinde.", encoding="utf-8")
     (settings.docs_dir / "efes.md").unlink()
     out = run("status")[1]
@@ -390,3 +391,9 @@ def test_log_export_writes_refused_candidates(run, tmp_path):
     out = run("log", "--export", str(target))[1]
     assert f"1 aday -> {target}" in out
     assert json.loads(target.read_text(encoding="utf-8"))[0]["question"] == "Pizza hamuru tarifi nedir?"
+
+
+def test_log_clear_empties_the_log(run, store):
+    run("ask", "Pizza hamuru tarifi nedir?")
+    assert run("log", "--clear")[1] == "Günlükten 1 soru silindi.\n"
+    assert store.query_counts() == (0, 0)

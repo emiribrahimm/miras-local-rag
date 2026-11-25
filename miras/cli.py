@@ -490,6 +490,9 @@ REFUSAL_LABELS = {"low_similarity": "kapıda reddedildi", "model": "model reddet
 def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
     """Soru günlüğü: neler soruldu, hangileri reddedildi (bilgi tabanındaki boşluklar)."""
     store = Store(settings.db_path)
+    if args.clear:
+        print(f"Günlükten {store.clear_queries()} soru silindi.")
+        return
     total, refused = store.query_counts()
     if not total:
         state = "" if settings.query_log else " (MIRAS_QUERY_LOG=0, günlük kapalı)"
@@ -531,6 +534,9 @@ def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
     print(f"Veritabanı: {settings.db_path}")
     print(f"İndeks: {docs} doküman, {chunks} parça" + (f" ({indexed_with})" if indexed_with else ""))
     print(f"Önbellek: {store.cache_size()} cevap · oylar: 👍 {up}  👎 {len(votes) - up}")
+    logged, refused = store.query_counts()
+    log_state = f"{logged} soru, {refused} reddedildi" if settings.query_log else "kapalı (MIRAS_QUERY_LOG=0)"
+    print(f"Soru günlüğü: {log_state}")
     print(f"Sohbet modeli: {settings.chat_model} ({settings.chat_device}), top_k {settings.top_k}, "
           f"eşik {settings.min_similarity}, bm25 {settings.bm25_weight}")
     if indexed_with and indexed_with != settings.embed_model:
@@ -705,6 +711,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--refused", action="store_true", help="Yalnızca reddedilen sorular")
     p.add_argument("--export", type=Path, metavar="DOSYA",
                    help="Reddedilen soruları eval adayı olarak JSON'a yaz")
+    p.add_argument("--clear", action="store_true", help="Günlüğü boşalt (oylar ve önbellek kalır)")
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
