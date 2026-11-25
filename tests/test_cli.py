@@ -403,3 +403,16 @@ def test_log_clear_empties_the_log(run, store):
     run("ask", "Pizza hamuru tarifi nedir?")
     assert run("log", "--clear")[1] == "Günlükten 1 soru silindi.\n"
     assert store.query_counts() == (0, 0)
+
+
+def test_doctor_prints_checks_and_fails_on_errors(run, monkeypatch):
+    from miras import doctor
+
+    monkeypatch.setattr(doctor, "check_sdk", lambda: doctor.Check("ok", "foundry-local-sdk", "kurulu"))
+    monkeypatch.setattr(doctor, "check_models", lambda: doctor.Check("warn", "modeller", "indirilmemiş"))
+    code, out, _ = run("doctor")
+    assert code == 0 and "✓ indeks" in out and "! modeller" in out
+    assert out.rstrip().endswith("Hata yok, 1 uyarı.")
+    monkeypatch.setattr(doctor, "check_sdk", lambda: doctor.Check("error", "foundry-local-sdk", "yok"))
+    code, out, err = run("doctor")
+    assert code == 1 and "✗ foundry-local-sdk" in out and "1 hata, 1 uyarı." in err

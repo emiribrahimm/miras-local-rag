@@ -1,5 +1,5 @@
 """Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, ask-batch, search, chat, eval,
-calibrate, feedback, log, status, config, docs, remove-doc, cache, compare-reports, serve."""
+calibrate, feedback, log, status, doctor, config, docs, remove-doc, cache, compare-reports, serve."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from . import evaluation
+from . import doctor, evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ENV_FIELDS, ROOT, SETTINGS, Settings, env_name
 from .export import answer_json, conversation_markdown
@@ -555,6 +555,21 @@ def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
     print("`python main.py ingest` ile indeksi güncelleyin.")
 
 
+DOCTOR_MARKS = {"ok": "✓", "warn": "!", "error": "✗"}
+
+
+def cmd_doctor(args: argparse.Namespace, settings: Settings) -> None:
+    """Kurulum kontrolleri; hata varsa komut 1 ile biter (betiklerde kullanılabilsin)."""
+    checks = doctor.run_checks(settings)
+    for check in checks:
+        print(f"{DOCTOR_MARKS[check.level]} {check.name:<18} {check.message}")
+    errors = sum(c.level == "error" for c in checks)
+    warnings = sum(c.level == "warn" for c in checks)
+    if errors:
+        raise CommandError(f"{errors} hata, {warnings} uyarı.")
+    print(f"\nHata yok, {warnings} uyarı." if warnings else "\nHer şey hazır.")
+
+
 def cmd_docs(args: argparse.Namespace, settings: Settings) -> None:
     docs = Store(settings.db_path).documents()
     if not docs:
@@ -721,6 +736,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
     p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("doctor", help="Kurulumu denetle: SDK, modeller, dokümanlar, indeks (model yüklemez)")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("docs", help="İndeksteki dokümanları listele (model çağırmaz)")
     p.set_defaults(func=cmd_docs)
