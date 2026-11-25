@@ -231,3 +231,35 @@ def test_compare_reports_lists_fixed_and_broken_questions():
     assert [r["id"] for r in diff["broken"]] == ["a01"]
     assert diff["only_old"] == ["a03"] and diff["only_new"] == ["a04"]
     assert diff["answers"] == ({"passed": 2, "total": 3}, {"passed": 2, "total": 3})
+
+
+def test_retrieval_report_without_chat_model(assistant, backend, tmp_path):
+    from miras.evaluation import evaluate_retrieval, followup_retrieval, write_retrieval_report
+    questions = [
+        {"id": "a1", "type": "answerable", "split": "dev", "doc": "efes.md",
+         "question": "Efes hangi ilçede?", "expected": [["Selçuk"]]},
+        {"id": "a2", "type": "answerable", "split": "dev", "doc": "gobeklitepe.md",
+         "question": "Göbeklitepe hangi yıl listeye girdi?", "expected": [["2018"]]},
+        {"id": "o1", "type": "out_of_domain", "split": "dev", "question": "Pizza hamuru tarifi nedir?"},
+    ]
+    followups = [
+        {"id": "f1", "type": "answerable", "doc": "gobeklitepe.md",
+         "turns": ["Göbeklitepe hangi ilde?", "Orası ne zaman listeye girdi?"], "expected": [["2018"]]},
+        {"id": "f2", "type": "out_of_domain", "turns": ["Efes nerede?", "Pizza hamuru tarifi nedir?"]},
+    ]
+    rows = evaluate_retrieval(questions, backend, assistant.retriever, 2)
+    follow = followup_retrieval(followups, assistant)
+    assert follow[0]["carried"] == ["Göbeklitepe"] and follow[0]["doc_rank"] == 1
+    assert follow[1]["gated"] is True and backend.chat_calls == []
+    header = {"embed_model": "e", "top_k": 2, "min_similarity": 0.2, "bm25_weight": 0.0,
+              "followup_min_similarity": 0.1, "chunks": 3}
+    summary = write_retrieval_report(tmp_path / "arama", header, rows, follow)
+    assert summary["by_doc"] == {"efes.md": {"total": 1, "at_1": 1, "at_k": 1, "in_context": 1},
+                                 "gobeklitepe.md": {"total": 1, "at_1": 1, "at_k": 1, "in_context": 1}}
+    assert summary["gate"]["answerable_passing"] == {"passed": 2, "total": 2}
+    assert summary["gate"]["out_of_domain_gated"] == {"passed": 1, "total": 1}
+    assert summary["followups"]["unanswerable_gated"] == {"passed": 1, "total": 1}
+    md = (tmp_path / "arama.md").read_text(encoding="utf-8")
+    assert md.startswith("# Arama raporu — e (sohbet modeli yok)")
+    assert "| efes.md | 1 | 1 | 1 | 1 |" in md and "| o1 | out_of_domain |" in md
+    assert json.loads((tmp_path / "arama.json").read_text(encoding="utf-8"))["followup_rows"][0]["id"] == "f1"

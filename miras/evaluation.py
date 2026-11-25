@@ -77,6 +77,7 @@ class RetrievalRow:
     top_score: float
     doc_rank: int | None      # beklenen dokümanın ilk göründüğü sıra (1 tabanlı)
     answer_in_context: bool   # beklenen anahtar kelimeler getirilen parçalarda var mı
+    doc: str | list[str] | None = None
 
 
 def evaluate_retrieval(questions: list[dict], backend: Backend, retriever: Retriever,
@@ -90,8 +91,118 @@ def evaluate_retrieval(questions: list[dict], backend: Backend, retriever: Retri
             rank = _doc_rank(hits, q["doc"])
             in_context = matches_expected("\n".join(h.chunk.text for h in hits), q["expected"])
         rows.append(RetrievalRow(q["id"], q["type"], q["split"], max(h.score for h in hits),
-                                 rank, in_context))
+                                 rank, in_context, q.get("doc")))
     return rows
+
+
+def retrieval_by_doc(rows: list[RetrievalRow]) -> dict[str, dict]:
+    """Cevaplanabilir sorularda doküman bazında arama: 1. sırada, ilk K içinde, cevap bağlamda."""
+    result: dict[str, dict] = {}
+    pairs = [(doc, r) for r in rows if r.type == "answerable" for doc in expected_docs(r.doc)]
+    for doc, r in sorted(pairs, key=lambda pair: pair[0]):
+        d = result.setdefault(doc, {"total": 0, "at_1": 0, "at_k": 0, "in_context": 0})
+        d["total"] += 1
+        d["at_1"] += r.doc_rank == 1
+        d["at_k"] += r.doc_rank is not None
+        d["in_context"] += r.answer_in_context
+    return result
+
+
+def gate_summary(rows: list[RetrievalRow], threshold: float) -> dict:
+    """Kapının bu eşikle ne yapacağı: reddedilmesi gerekenlerden kaçı, yanlışlıkla kaçı kapıda kalır."""
+    def count(kinds: tuple[str, ...], gated: bool) -> dict:
+        subset = [r for r in rows if r.type in kinds]
+        return {"passed": sum((r.top_score < threshold) == gated for r in subset), "total": len(subset)}
+
+    return {"threshold": threshold, "answerable_passing": count(("answerable",), False),
+            "near_miss_gated": count(("near_miss",), True),
+            "out_of_domain_gated": count(("out_of_domain",), True)}
+
+
+def followup_retrieval(items: list[dict], assistant: Assistant) -> list[dict]:
+    """Takip setinde yalnızca arama: konu taşındı mı, doğru doküman kaçıncı, kapıdan geçiyor mu.
+
+    Önceki turların cevabı üretilmez; konu sorudaki alan adından gelir (setteki ilk sorular
+    alanı adıyla anıyor), sohbet modeli hiç çağrılmaz.
+    """
+    rows = []
+    for q in items:
+        *earlier, last = q["turns"]
+        previous = None
+        for turn in earlier:
+            previous = assistant.finalize(assistant.prepare(turn, previous), "")
+        prepared = assistant.prepare(last, previous)
+        standalone = assistant.prepare(last)
+        doc = q.get("doc")
+        rows.append({"id": q["id"], "type": q["type"], "turns": q["turns"],
+                     "carried": list(prepared.carried),
+                     "doc_rank": _doc_rank(prepared.hits, doc) if doc else None,
+                     "standalone_doc_rank": _doc_rank(standalone.hits, doc) if doc else None,
+                     "gated": prepared.refusal_reason == "low_similarity"})
+    return rows
+
+
+def write_retrieval_report(path_stem: Path, header: dict, rows: list[RetrievalRow],
+                           followup_rows: list[dict] = ()) -> dict:
+    """Sohbet modeli olmadan ölçülen arama raporu (JSON ve Markdown); özeti döner."""
+    summary = {"retrieval": retrieval_summary(rows), "by_doc": retrieval_by_doc(rows),
+               "gate": gate_summary(rows, header["min_similarity"])}
+    if followup_rows:
+        answerable = [r for r in followup_rows if r["type"] == "answerable"]
+        summary["followups"] = {
+            "carried_when_answerable": {"passed": sum(bool(r["carried"]) for r in answerable),
+                                        "total": len(answerable)},
+            "doc_at_1_with_topic": {"passed": sum(r["doc_rank"] == 1 for r in answerable),
+                                    "total": len(answerable)},
+            "doc_at_1_standalone": {"passed": sum(r["standalone_doc_rank"] == 1 for r in answerable),
+                                    "total": len(answerable)},
+            "unanswerable_gated": {"passed": sum(r["gated"] for r in followup_rows if r["type"] in UNANSWERABLE),
+                                   "total": sum(r["type"] in UNANSWERABLE for r in followup_rows)}}
+    path_stem.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"config": header, **summary, "rows": [asdict(r) for r in rows],
+               "followup_rows": list(followup_rows)}
+    path_stem.with_name(path_stem.name + ".json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def frac(d: dict) -> str:
+        return f"{d['passed']}/{d['total']}"
+
+    retrieval, gate = summary["retrieval"], summary["gate"]
+    lines = [
+        f"# Arama raporu — {header['embed_model']} (sohbet modeli yok)", "",
+        f"- top_k: {header['top_k']}, benzerlik eşiği: {header['min_similarity']}, "
+        f"BM25 ağırlığı: {header['bm25_weight']}, takip konu eşiği: {header['followup_min_similarity']}",
+        f"- Parça sayısı: {header['chunks']}",
+        *([f"- Alt küme: {header['subset']}"] if header.get("subset") else []), "",
+        "## Arama (cevaplanabilir sorular)", "",
+        f"- Doğru doküman 1. sırada: {retrieval['doc_hit_at_1']:.0%}",
+        f"- Doğru doküman ilk {header['top_k']} içinde: {retrieval['doc_hit_at_k']:.0%}",
+        f"- MRR: {retrieval['mrr']:.3f}",
+        f"- Cevap getirilen parçalarda mevcut: {retrieval['answer_in_context_at_k']:.0%}", "",
+        "## Kapı", "",
+        f"- Cevaplanabilir sorular eşiği geçiyor: {frac(gate['answerable_passing'])}",
+        f"- Konu içi ama dokümanda olmayan sorular kapıda kalıyor: {frac(gate['near_miss_gated'])}",
+        f"- Konu dışı sorular kapıda kalıyor: {frac(gate['out_of_domain_gated'])}", "",
+    ]
+    if summary["by_doc"]:
+        lines += ["## Doküman bazında", "", "| Doküman | Soru | 1. sırada | İlk K içinde | Cevap bağlamda |",
+                  "|---|---|---|---|---|"]
+        lines += [f"| {doc} | {d['total']} | {d['at_1']} | {d['at_k']} | {d['in_context']} |"
+                  for doc, d in summary["by_doc"].items()]
+        lines.append("")
+    if followup_rows:
+        f = summary["followups"]
+        lines += ["## Takip soruları", "",
+                  f"- Cevaplanabilir takip sorularında konu taşındı: {frac(f['carried_when_answerable'])}",
+                  f"- Doğru doküman 1. sırada, konuyla: {frac(f['doc_at_1_with_topic'])}, "
+                  f"tek başına: {frac(f['doc_at_1_standalone'])}",
+                  f"- Reddedilmesi gerekenler kapıda kalıyor: {frac(f['unanswerable_gated'])}", ""]
+    lines += ["## Soru bazında", "", "| # | Tür | Skor | Doküman sırası | Cevap bağlamda |",
+              "|---|---|---|---|---|"]
+    lines += [f"| {r.id} | {r.type} | {r.top_score:.2f} | {r.doc_rank or '-'} | "
+              f"{'✅' if r.answer_in_context else ('❌' if r.type == 'answerable' else '-')} |" for r in rows]
+    path_stem.with_name(path_stem.name + ".md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return summary
 
 
 def retrieval_summary(rows: list[RetrievalRow]) -> dict:
