@@ -199,6 +199,11 @@ off and `ingest --rebuild` leaves it alone.
 The tests use a fake backend instead of the models, so they also run on GitHub Actions on every
 push (Python 3.12 and 3.13, without the Foundry Local SDK).
 
+In the web UI, "Arama ayarları" in the sidebar has sliders for `top_k`, the threshold and the BM25
+weight. They only change the current browser session (the loaded models and the index are shared),
+which makes it easy to see what a different threshold would do to a question before changing the
+default. Answers given with changed settings say so under the answer and in the exports.
+
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
 `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_QUERY_LOG` or `MIRAS_DOCS_DIR`. If you change the
@@ -492,6 +497,11 @@ ne sorulduğunu görmenin en hızlı yolu bu. `log --export reports/log-adaylar.
 
 Testler modeller yerine sahte bir arka uç kullandığı için her push'ta GitHub Actions'ta da
 çalışıyor (Python 3.12 ve 3.13, Foundry Local SDK olmadan).
+
+Web arayüzünde kenar çubuğundaki "Arama ayarları" bölümünde `top_k`, eşik ve BM25 ağırlığı için
+kaydırıcılar var. Yalnızca o tarayıcı oturumunu değiştiriyorlar (yüklü modeller ve indeks
+paylaşılıyor); varsayılanı değiştirmeden önce farklı bir eşiğin bir soruya ne yapacağını görmek
+kolaylaşıyor. Değişmiş ayarlarla verilen cevaplar bunu cevabın altında ve dışa aktarımda belirtiyor.
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
 `MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_QUERY_LOG`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
