@@ -23,3 +23,11 @@ def test_no_match_gives_zeros():
     bm25 = BM25(["Efes İzmir'dedir.", "Ani Kars'tadır."])
     assert not bm25.scores("pizza tarifi").any()
     assert not bm25.scores("hangi kim nedir").any()
+
+
+def test_all_known_needs_every_content_stem_in_the_corpus():
+    bm25 = BM25(["Selimiye 1575 yılında yapılmıştır.", "Efes İzmir'de bir antik kenttir."])
+    assert bm25.all_known("Peki ne zaman yapılmış?") is False  # "zaman" yok
+    assert bm25.all_known("Peki hangi yılında yapılmış?") is True
+    assert bm25.all_known("Peki pizza hangi yılında yapılır?") is False
+    assert bm25.all_known("Peki ne?") is False  # içerik kelimesi yok
