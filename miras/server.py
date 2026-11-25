@@ -140,10 +140,12 @@ PUBLIC_PATHS = {"/health"}
 
 
 def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
-                token: str | None = None) -> ThreadingHTTPServer:
+                token: str | None = None, cors_origin: str | None = None) -> ThreadingHTTPServer:
     """Henüz dinlemeye başlamamış sunucu; `serve_forever()` ile çalışır. `port=0` boş bir port seçer.
 
     `token` verilirse `/health` dışındaki istekler `Authorization: Bearer <token>` ister.
+    `cors_origin` verilirse ("http://localhost:3000" ya da "*") o adresteki sayfalar tarayıcıdan
+    çağırabilir.
     """
     api = Api(assistant)
 
@@ -158,6 +160,23 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
 
         def do_POST(self) -> None:
             self._handle("POST")
+
+        def do_OPTIONS(self) -> None:
+            """Tarayıcının ön kontrol isteği; kimlik bilgisi taşımadığı için token aranmaz."""
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self._cors()
+            if cors_origin:
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+                self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def _cors(self) -> None:
+            if cors_origin:
+                self.send_header("Access-Control-Allow-Origin", cors_origin)
+                if cors_origin != "*":
+                    self.send_header("Vary", "Origin")
 
         def _handle(self, method: str) -> None:
             path = self.path.split("?", 1)[0]
@@ -210,6 +229,7 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
             """NDJSON akışı; uzunluk baştan bilinmediği için bağlantı sonunda kapanır."""
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self._cors()
             self.end_headers()
             self.close_connection = True
             try:
@@ -231,6 +251,7 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
+            self._cors()
             if status == HTTPStatus.UNAUTHORIZED:
                 self.send_header("WWW-Authenticate", 'Bearer realm="miras"')
             self.end_headers()
