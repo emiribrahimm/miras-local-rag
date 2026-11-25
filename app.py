@@ -218,6 +218,29 @@ def render_cache() -> None:
         store.close()
 
 
+REFUSAL_LABELS = {"low_similarity": "kapıda", "model": "model reddetti"}
+
+
+def render_refused_questions() -> None:
+    """Günlükte son reddedilen sorular: dokümanların kapsamadığı ne soruluyor."""
+    store = Store(SETTINGS.db_path)
+    try:
+        total, refused = store.query_counts()
+        rows = store.query_rows(refused=True, limit=10)
+    finally:
+        store.close()
+    if not SETTINGS.query_log:
+        st.caption("Soru günlüğü kapalı (MIRAS_QUERY_LOG=0).")
+        return
+    st.caption(f"Günlükte {total} soru, {refused} tanesi reddedildi. "
+               "Tamamı için: `python main.py log --refused`")
+    for row in rows:
+        when = datetime.fromtimestamp(row["created"])
+        st.markdown(f"- {when:%d.%m %H:%M} · {row['question']} "
+                    f"_({REFUSAL_LABELS.get(row['refusal_reason'], row['refusal_reason'])}, "
+                    f"{row['top_score']:.2f})_")
+
+
 def record_vote(key: str, turn: int) -> None:
     """Oy değişince çağrılır; oy veritabanına yazılır (geri alınırsa silinir)."""
     question, answer = st.session_state.history[turn]
@@ -349,6 +372,8 @@ with st.sidebar:
     render_delete_result()
     with st.expander("Dokümanı incele"):
         render_document(assistant, filenames, titles)
+    with st.expander("Reddedilen sorular"):
+        render_refused_questions()
     st.subheader("Örnek sorular")
     clicked = next((q for q in EXAMPLES if st.button(q, use_container_width=True)), None)
     if st.button("Sohbeti temizle"):

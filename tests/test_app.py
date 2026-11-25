@@ -301,3 +301,13 @@ def test_search_settings_apply_to_this_session_only(app, settings):
     assert len(answer.hits) == 1 and not answer.refused
     assert any(c.value.endswith("top_k 1") for c in app.chat_message[3].caption)
     assert not any("⚙️" in c.value for c in app.chat_message[1].caption if "top_k" in c.value)
+
+
+def test_refused_questions_are_listed_in_the_sidebar(app):
+    app.chat_input[0].set_value("Pizza hamuru tarifi nedir?").run()
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert not app.exception
+    assert any(c.value.startswith("Günlükte 2 soru, 1 tanesi reddedildi.") for c in app.sidebar.caption)
+    refused = [m.value for m in app.sidebar.markdown if "Pizza hamuru" in m.value]
+    assert len(refused) == 1 and "_(kapıda, " in refused[0]
+    assert not any("Efes nerede?" in m.value for m in app.sidebar.markdown)

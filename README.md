@@ -201,8 +201,9 @@ and API, but not `eval`): the question as typed, the carried topic, the document
 was refused if it was, the best similarity and which files were cited. Answer texts aren't kept.
 `log` shows the latest ones (`-n 50`), `log --refused` only the refusals, which is the quickest way
 to see what people ask that the documents don't cover, and `log --export reports/log-candidates.json`
-writes those in the `questions.json` format. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it
-off and `ingest --rebuild` leaves it alone.
+writes those in the `questions.json` format. The latest refusals are also under "Reddedilen sorular"
+in the web UI sidebar. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it off and
+`ingest --rebuild` leaves it alone.
 
 The tests use a fake backend instead of the models, so they also run on GitHub Actions on every
 push (Python 3.12 and 3.13, without the Foundry Local SDK).
@@ -519,7 +520,8 @@ Oylar yalnızca birinin değerlendirdiği cevapları kapsadığı için her soru
 reddedildiyse sebebi, en iyi benzerlik ve atıf yapılan dosyalar. Cevap metinleri saklanmıyor. `log`
 son soruları gösteriyor (`-n 50`), `log --refused` yalnızca reddedilenleri; dokümanların kapsamadığı
 ne sorulduğunu görmenin en hızlı yolu bu. `log --export reports/log-adaylar.json` bunları
-`questions.json` biçiminde yazıyor. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
+`questions.json` biçiminde yazıyor. Son reddedilenler web arayüzünde kenar çubuğundaki "Reddedilen
+sorular" bölümünde de görünüyor. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
 `ingest --rebuild` dokunmuyor.
 
 Testler modeller yerine sahte bir arka uç kullandığı için her push'ta GitHub Actions'ta da
