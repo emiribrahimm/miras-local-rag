@@ -99,11 +99,14 @@ class Assistant:
         # Bu metin hem aramada hem de modele giden soruda kullanılır. Soru tek başına hiçbir
         # parçaya benzemiyorsa (konu dışı) konu taşınmaz: alan adı onu kapıdan geçirmesin.
         # "Orası", "onun" gibi açık bir gönderme varsa benzerliğe bakılmaz; kısa sorular
-        # embedding'de zayıf kalıp tabanın altına düşebiliyor.
+        # embedding'de zayıf kalıp tabanın altına düşebiliyor. Gönderme kelimesi olmayan kısa
+        # sorular ("Peki ne zaman yapılmış?") da bütün kelimeleri bilgi tabanında geçiyorsa
+        # taşınır; "pizza" gibi tek bir yabancı kelime bu yolu kapatır.
         carried: tuple[str, ...] = ()
         topic = previous.topic if previous else tuple(topic)
         if (topic and not self.retriever.mentioned_titles(question)
-                and (refers_back(question) or self.retriever.best_score(vector, docs or None)
+                and (refers_back(question) or self.retriever.all_terms_known(question)
+                     or self.retriever.best_score(vector, docs or None)
                      >= self.settings.followup_min_similarity)):
             carried = topic
             question = f"{', '.join(carried)} hakkında: {question}"

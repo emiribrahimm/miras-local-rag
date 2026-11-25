@@ -129,6 +129,16 @@ def test_refers_back_carries_topic_below_floor(assistant, backend, settings):
     assert assistant.ask("Peki ne zaman listeye girdi?", first).carried == ()
 
 
+def test_short_follow_up_in_known_words_carries_topic_below_floor(assistant, settings):
+    import dataclasses
+    assistant.settings = dataclasses.replace(settings, followup_min_similarity=0.99)
+    first = assistant.ask("Efes hangi ilde?")
+    # Gönderme kelimesi yok ama bütün kelimeler bilgi tabanında geçiyor.
+    assert assistant.ask("Peki hangi ilçesinde?", first).carried == ("Efes",)
+    # Tek bir yabancı kelime yeterli: eşiğe kalır, eşik de geçilemez.
+    assert assistant.ask("Peki ilçede kaç ziyaretçi var?", first).carried == ()
+
+
 def test_refers_back_with_site_name_switches_topic(assistant, backend):
     first = assistant.ask("Göbeklitepe hangi ilde?")
     answer = assistant.ask("Peki Efes'teki tiyatro onun kadar eski mi?", first)

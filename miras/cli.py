@@ -335,6 +335,10 @@ def cmd_calibrate(args: argparse.Namespace, settings: Settings) -> None:
         keep, block = evaluation.followup_floor_scores(
             evaluation.load_questions(followups_path),
             evaluation.load_questions(ROOT / "data" / "eval" / "questions.json"), backend, retriever)
+        if not keep or not block:
+            print("\nTakip eşiği ölçülemedi: eşiğe bağlı takip sorusu ya da konu dışı soru yok "
+                  "(gönderme kelimeli ve bütün kelimeleri bilinen takip soruları eşiğe bakmaz).")
+            return
         floor = evaluation.calibrate_followup_floor(keep, block)
         print(f"\nTakip soruları tek başına en düşük {floor['lowest_followup']:.3f}, "
               f"konu dışı sorular en yüksek {floor['highest_off_topic']:.3f}")

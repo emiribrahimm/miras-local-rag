@@ -186,6 +186,9 @@ EVAL_QUESTIONS = [
 EVAL_FOLLOWUPS = [
     {"id": "f01", "type": "answerable", "doc": "efes.md",
      "turns": ["Efes hangi ilde?", "Peki hangi ilçesinde?"], "expected": [["Selçuk"]]},
+    # Bilgi tabanında geçmeyen bir kelime ("ziyaretçi") taşımayı benzerlik eşiğine bırakır.
+    {"id": "f02", "type": "answerable", "doc": "efes.md",
+     "turns": ["Efes hangi ilde?", "Peki ilçede kaç ziyaretçi var?"], "expected": [["Selçuk"]]},
 ]
 
 
