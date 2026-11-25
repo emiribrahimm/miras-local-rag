@@ -79,7 +79,8 @@ class Assistant:
         self.backend = backend
         self.retriever = retriever
         self.settings = settings
-        # Verilirse ham model cevapları bu veritabanında önbelleğe alınır (settings.answer_cache).
+        # Verilirse ham model cevapları bu veritabanında önbelleğe alınır (settings.answer_cache)
+        # ve sorular günlüğe yazılır (settings.query_log).
         self.cache = cache
 
     def prepare(self, question: str, previous: Answer | None = None,
@@ -173,11 +174,26 @@ class Assistant:
             else:
                 text = strip_invalid_citations(text, len(prepared.hits))
                 cited = cited_indices(text, len(prepared.hits))
-        return Answer(text, reason is not None, reason, prepared.hits, cited,
-                      prepared.retrieval_seconds, generation_seconds,
-                      carried=prepared.carried, topic=self._topic(prepared, cited),
-                      cached=prepared.cached, docs=prepared.docs,
-                      support=supporting_sentences(text, prepared.hits, cited) if cited else {})
+        answer = Answer(text, reason is not None, reason, prepared.hits, cited,
+                        prepared.retrieval_seconds, generation_seconds,
+                        carried=prepared.carried, topic=self._topic(prepared, cited),
+                        cached=prepared.cached, docs=prepared.docs,
+                        support=supporting_sentences(text, prepared.hits, cited) if cited else {})
+        self._log(prepared, answer)
+        return answer
+
+    def _log(self, prepared: Prepared, answer: Answer) -> None:
+        """Soruyu günlüğe yazar; boş sorular ve günlük kapalıyken yazılmaz."""
+        if self.cache is None or not self.settings.query_log or answer.refusal_reason == "empty":
+            return
+        # Taşınan konu ayrıca saklandığı için kullanıcının yazdığı hali kaydedilir.
+        question = prepared.question
+        if prepared.carried:
+            question = question.removeprefix(f"{', '.join(prepared.carried)} hakkında: ")
+        cited = sorted({hit.chunk.filename for hit in answer.sources})
+        self.cache.log_query(question, answer.carried, answer.docs, answer.refusal_reason,
+                             max(hit.score for hit in answer.hits), cited, answer.cached,
+                             self.backend.chat_model)
 
     def _topic(self, prepared: Prepared, cited: list[int]) -> tuple[str, ...]:
         """Soruda adı geçen alanlar; hiç ad geçmiyorsa cevabın atıf yaptığı tek alan."""

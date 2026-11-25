@@ -238,3 +238,27 @@ def test_topic_can_be_given_without_a_previous_answer(assistant, backend):
     # Önceki cevap verilirse onun konusu geçerli.
     first = assistant.ask("Efes nerede?")
     assert assistant.prepare("Orası ne zaman yapılmış?", first, topic=("Göbeklitepe",)).carried == ("Efes",)
+
+
+def test_questions_are_logged_with_their_outcome(assistant, backend, settings, store):
+    import dataclasses
+    assistant.cache = store
+    backend.reply = "Göbeklitepe Şanlıurfa'dadır [K1]."
+    first = assistant.ask("Göbeklitepe hangi ilde?")
+    assistant.ask("Orası ne zaman listeye girdi?", first)
+    assistant.ask("Pizza hamuru tarifi nedir?")
+    assistant.ask("   ")  # boş soru yazılmaz
+    rows = store.query_rows()
+    assert [r["question"] for r in rows] == ["Pizza hamuru tarifi nedir?", "Orası ne zaman listeye girdi?",
+                                             "Göbeklitepe hangi ilde?"]
+    assert rows[0]["refusal_reason"] == "low_similarity" and rows[0]["cited"] == ()
+    assert rows[1]["carried"] == ("Göbeklitepe",) and rows[2]["cited"] == ("gobeklitepe.md",)
+
+    assistant.settings = dataclasses.replace(settings, query_log=False)
+    assistant.ask("Efes nerede?")
+    assert store.query_counts()[0] == 3
+
+
+def test_assistant_without_a_store_logs_nothing(assistant, store):
+    assistant.ask("Efes nerede?")
+    assert store.query_counts() == (0, 0)

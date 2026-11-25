@@ -57,6 +57,9 @@ class Settings:
     # Cevap önbelleği: aynı model, ayarlar ve aynı prompt (soru + getirilen parçalar) için ham
     # model çıktısı SQLite'ta saklanır ve tekrar sorulduğunda model çağrılmaz. "0" = kapalı.
     answer_cache: bool = _env("ANSWER_CACHE", "1") != "0"
+    # Soru günlüğü: sorulan her soru (cevap metni olmadan) reddetme sebebi ve en iyi benzerlikle
+    # aynı veritabanına yazılır; `log` komutu bilgi tabanındaki boşlukları gösterir. "0" = kapalı.
+    query_log: bool = _env("QUERY_LOG", "1") != "0"
 
     temperature: float = 0.0
     max_output_tokens: int = 400
@@ -82,7 +85,8 @@ class Settings:
 
 # MIRAS_<AD> ortam değişkeniyle ezilebilen alanlar; geri kalanı yalnızca bu dosyadan değişir.
 ENV_FIELDS = ("docs_dir", "db_path", "chat_model", "embed_model", "chat_device", "top_k",
-              "min_similarity", "bm25_weight", "followup_min_similarity", "answer_cache")
+              "min_similarity", "bm25_weight", "followup_min_similarity", "answer_cache",
+              "query_log")
 
 
 def env_name(field: str) -> str:

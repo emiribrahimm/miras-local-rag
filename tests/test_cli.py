@@ -321,6 +321,7 @@ def test_full_eval_runs_both_sets_without_the_answer_cache(run, eval_root, backe
     assert report["rows"][0]["passed"] and report["followups"]["rows"][0]["carried"] == ["Efes"]
     assert report["config"]["top_k"] == 2 and "subset" not in report["config"]
     assert len(backend.chat_calls) > calls and store.cache_size() == 1
+    assert store.query_counts()[0] == 1  # eval soruları günlüğe yazılmaz
 
 
 def test_calibrate_and_tune_hybrid_print_suggestions(run, eval_root, backend):
