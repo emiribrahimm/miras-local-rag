@@ -50,7 +50,11 @@ A few things I added after looking at where it went wrong:
   set scored 0.31–0.44, so 0.40 is a cautious first guess, not a measured one yet. Short
   follow-ups can score below that too, so if the question points back with a word like "orası",
   "oradaki", "onun" or "hangisi" the topic is carried without checking the floor. "Peki" alone
-  doesn't count, otherwise "Peki ekmek hamuru nasıl mayalanır?" would get the site name too.
+  doesn't count, otherwise "Peki ekmek hamuru nasıl mayalanır?" would get the site name too. A
+  follow-up without such a word is also carried if every word in it (besides question words) shows
+  up in the previous site's own document: "Peki yüksekliği kaç metre?" after Nemrut Dağı, but not
+  "Peki kahve nasıl demlenir?" after Efes. It has to be that site's document and not the whole
+  knowledge base, because "Türk kahvesi" does appear in another article.
 - There's an optional keyword score (BM25 over word stems, the first 5 letters of each word) that
   can be added to the ranking, for dates and rare names the embeddings miss. It's off by default
   because I haven't measured it on the real models yet: `tune-hybrid` tries a few weights on the
@@ -239,8 +243,8 @@ was on the first 44 questions, before the comparison ones were added.
 Take that with a grain of salt though. It's a small set I wrote myself, and scoring is keyword
 based, so it says more about this kind of question than about the system in general.
 
-There's also a small follow-up set in `data/eval/followups.json`: 24 two-turn conversations where
-only the second question is scored (16 answerable, 8 that should be refused, 5 of them off-topic). `eval` runs it after
+There's also a small follow-up set in `data/eval/followups.json`: 29 two-turn conversations where
+only the second question is scored (19 answerable, 10 that should be refused, 7 of them off-topic). `eval` runs it after
 the main set and adds a section to the report that also shows where the right document would have
 ranked if the follow-up had been asked on its own. The report above predates it, so rerun `eval`
 to get those numbers, including how many off-topic follow-ups were refused without calling the
@@ -258,10 +262,11 @@ the scores before and after, and which questions got fixed or broken in between.
 - It's slow. ~14 s per answer on CPU, although streaming helps a bit (repeated questions come from the cache). There's a GPU option
   (`--device gpu` or `MIRAS_CHAT_DEVICE=gpu`) but I haven't tested or measured it.
 - Follow-ups only carry over the site, not the rest of the conversation. Whether a follow-up is
-  off-topic is decided by one similarity floor plus a short list of words that point back, so a
-  short follow-up without one ("Peki ne zaman?") can score below the floor and lose the topic, and
-  an off-topic one that happens to use one ("Orada yarın hava nasıl?") gets the site name and has
-  to be refused by the model.
+  off-topic is decided by one similarity floor, a short list of words that point back and whether
+  all of its words appear in the site's document. A short follow-up that uses a word the article
+  doesn't ("Peki ne zaman?" when the article never says "zaman") can still score below the floor
+  and lose the topic, and an off-topic one that happens to point back ("Orada yarın hava nasıl?")
+  gets the site name and has to be refused by the model.
 - Comparison questions only get one guaranteed chunk per named site (the rest go by ranking). That's
   enough for a year or a province, but if one site's answer sits in a chunk that ranks low it can
   still be missed. The 4 comparison questions in the eval set haven't been run on the real models
@@ -318,7 +323,11 @@ Hatalara bakarak sonradan eklediğim birkaç şey:
   temkinli bir başlangıç değeri. Kısa takip soruları da bu değerin altında kalabildiği için soru
   "orası", "oradaki", "onun", "hangisi" gibi bir kelimeyle öncekine gönderme yapıyorsa konu eşiğe
   bakılmadan taşınıyor. Tek başına "Peki" sayılmıyor; yoksa "Peki ekmek hamuru nasıl mayalanır?"
-  sorusuna da alan adı eklenirdi.
+  sorusuna da alan adı eklenirdi. Böyle bir kelime içermeyen takip sorusu da, soru kelimeleri
+  dışındaki bütün kelimeleri önceki alanın kendi dokümanında geçiyorsa taşınıyor: Nemrut Dağı'ndan
+  sonra "Peki yüksekliği kaç metre?" taşınıyor, Efes'ten sonra "Peki kahve nasıl demlenir?"
+  taşınmıyor. Bütün bilgi tabanına değil o alanın dokümanına bakılıyor, çünkü "Türk kahvesi" başka
+  bir maddede geçiyor.
 - İsteğe bağlı bir anahtar kelime skoru var (kelimelerin ilk 5 harfi üzerinden BM25). Embedding'in
   kaçırdığı tarih ve nadir isimler için sıralamaya eklenebiliyor. Gerçek modellerle henüz
   ölçmediğim için varsayılan olarak kapalı: `tune-hybrid` birkaç ağırlığı test sorularında deneyip
@@ -507,8 +516,8 @@ karşılaştırma soruları eklenmeden önceki 44 soruyla yapıldı.
 Bu sonucu fazla büyütmemek lazım: set küçük, soruları ben yazdım ve puanlama anahtar kelimeye
 dayanıyor. Bu tip sorularda iyi çalıştığını gösteriyor, her soruda doğru cevap vereceğini değil.
 
-Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 24 iki turluk sohbet,
-sadece ikinci soru puanlanıyor (16'sı cevaplanabilir, 8'i reddedilmeli, bunların 5'i konu dışı). `eval` bunları ana setten
+Takip soruları için ayrı küçük bir set de var (`data/eval/followups.json`): 29 iki turluk sohbet,
+sadece ikinci soru puanlanıyor (19'u cevaplanabilir, 10'u reddedilmeli, bunların 7'si konu dışı). `eval` bunları ana setten
 sonra çalıştırıp rapora ayrı bir bölüm ekliyor; takip sorusu tek başına sorulsaydı doğru dokümanın
 kaçıncı sırada geleceği de orada. Yukarıdaki rapor bu setten önce üretildi, rakamlar için `eval`
 yeniden çalıştırılmalı. Konu dışı takip sorularından kaçının model çağrılmadan reddedildiği de
@@ -526,9 +535,10 @@ ve sonraki skorları ve arada düzelen ya da bozulan soruları listeliyor.
 - Yavaş. CPU'da cevap başına ~14 sn, akış halinde geldiği için biraz daha az hissediliyor (tekrar eden sorular önbellekten geliyor).
   GPU seçeneği var (`--device gpu` ya da `MIRAS_CHAT_DEVICE=gpu`) ama test etmedim.
 - Takip sorularında sadece alan taşınıyor, sohbetin geri kalanı değil. Sorunun konu dışı olup
-  olmadığına tek bir benzerlik eşiği ve kısa bir gönderme kelimeleri listesi karar veriyor; "Peki ne
-  zaman?" gibi bu kelimelerden birini içermeyen kısa bir soru eşiğin altında kalıp konuyu
-  kaybedebilir, birini içeren konu dışı bir soru ("Orada yarın hava nasıl?") ise alan adını alıp
+  olmadığına tek bir benzerlik eşiği, kısa bir gönderme kelimeleri listesi ve kelimelerinin alanın
+  dokümanında geçip geçmediği karar veriyor. Maddede geçmeyen bir kelime kullanan kısa bir soru
+  ("Peki ne zaman?", madde hiç "zaman" demiyorsa) yine eşiğin altında kalıp konuyu kaybedebilir;
+  gönderme kelimesi içeren konu dışı bir soru ("Orada yarın hava nasıl?") ise alan adını alıp
   modelin reddetmesine kalır.
 - Karşılaştırma sorularında adı geçen her alan için yalnızca bir parça garanti (geri kalanı
   sıralamaya göre). Bir yıl ya da il için yetiyor, ama bir alanın cevabı sıralamada geride kalan bir
