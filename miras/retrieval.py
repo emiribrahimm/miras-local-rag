@@ -50,6 +50,8 @@ def title_keys(title: str, aliases: tuple[str, ...] = ()) -> set[str]:
 # Yazım hatası toleransı bu uzunluktan kısa adlara uygulanmaz: "Ani" -> "anı",
 # "İlion" -> "ilin" gibi gündelik kelimelerle karışır.
 FUZZY_MIN_CHARS = 6
+# Bu uzunluktan itibaren iki harflik hata da kabul edilir ("Gbeklitpe" -> "gobeklitepe").
+FUZZY_TWO_EDITS_CHARS = 9
 
 
 def edit_distance(a: str, b: str) -> int:
@@ -69,12 +71,14 @@ def edit_distance(a: str, b: str) -> int:
 
 def fuzzy_mentions(words: list[str], key: str) -> bool:
     """Sorgudaki kelimelerden biri (çok kelimeli adlarda ardışık kelimeler) ada en fazla
-    bir harf uzaklıktaysa doğru: "göbeklitpe", "selimye", "gobekli tpe"."""
+    bir harf uzaklıktaysa doğru: "göbeklitpe", "selimye", "gobekli tpe". 9 harf ve üstü
+    adlarda iki harf de olur: "gbeklitpe"."""
     key = key.translate(_ASCII)
     if len(key) < FUZZY_MIN_CHARS:
         return False
+    limit = 2 if len(key) >= FUZZY_TWO_EDITS_CHARS else 1
     n = len(key.split())
-    return any(edit_distance(" ".join(words[i:i + n]), key) <= 1
+    return any(edit_distance(" ".join(words[i:i + n]), key) <= limit
                for i in range(len(words) - n + 1))
 
 

@@ -183,7 +183,9 @@ def test_typos_in_long_names_still_get_title_boost(store, backend):
     assert boosted("Epheuss nerede?") == {"efes.md"}  # yan yana harf takası
     # Kısa adlarda tolerans yok; iki harf hata da eşleşmez.
     assert boosted("Efs nerede?") == set()
-    assert boosted("Gbeklitpe nerede?") == set()
+    # Uzun adlarda iki harf hata kabul edilir, üç harf edilmez.
+    assert boosted("Gbeklitpe nerede?") == {"gobeklitepe.md"}
+    assert boosted("Gbklitpe nerede?") == set()
 
 
 def test_edit_distance_and_short_names():
