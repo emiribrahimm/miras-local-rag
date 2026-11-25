@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import dataclasses
 import time
 import uuid
 from collections import Counter
@@ -295,6 +297,16 @@ with st.sidebar:
                 f"- Parça sayısı: {len(assistant.retriever.chunks)}\n- top_k: {SETTINGS.top_k}, "
                 f"eşik: {SETTINGS.min_similarity}")
     show_all = st.toggle("Getirilen tüm parçaları göster", value=False)
+    with st.expander("Arama ayarları"):
+        # Yalnızca bu oturum: önbellekteki asistan herkesle paylaşılıyor, onun ayarları değişmez.
+        top_k = st.slider("Getirilecek parça (top_k)", 1, max(10, SETTINGS.top_k), SETTINGS.top_k,
+                          key="top_k")
+        min_similarity = st.slider("Benzerlik eşiği", 0.0, 1.0, float(SETTINGS.min_similarity), 0.01,
+                                   key="min_similarity",
+                                   help="En iyi parça bunun altındaysa model çağrılmadan reddedilir.")
+        bm25_weight = st.slider("BM25 ağırlığı", 0.0, 1.0, float(SETTINGS.bm25_weight), 0.05,
+                                key="bm25_weight", help="0 = yalnızca embedding (hibrit arama kapalı).")
+        st.caption("Yalnızca bu oturum için; varsayılanlar config.py ve MIRAS_* ile değişir.")
     render_cache()
     st.subheader("Bilgi tabanı")
     chunk_counts = Counter(c.filename for c in assistant.retriever.chunks)
@@ -361,6 +373,11 @@ for turn, (question, past) in enumerate(history):
             st.button("Yeniden üret", key=f"regenerate-{turn}", on_click=regenerate_last,
                       help="Önbelleğe bakmadan modeli yeniden çağırır ve önbelleği günceller.")
 
+# Oturumun arama ayarlarıyla sığ bir kopya; modeller, indeks ve önbellek paylaşılır.
+session = copy.copy(assistant)
+session.settings = dataclasses.replace(SETTINGS, top_k=top_k, min_similarity=min_similarity,
+                                       bm25_weight=bm25_weight)
+
 typed = st.chat_input("Bir soru sorun...")
 regenerated = st.session_state.pop("regenerate", None)
 question = regenerated or typed or clicked
@@ -370,11 +387,11 @@ if question:
         try:
             with st.spinner("İlgili parçalar aranıyor..."):
                 # Son cevabın konusu, alan adı geçmeyen takip sorularına taşınır.
-                prepared = assistant.prepare(question, history[-1][1] if history else None,
-                                             frozenset(only_docs) or None)
+                prepared = session.prepare(question, history[-1][1] if history else None,
+                                           frozenset(only_docs) or None)
             started = time.perf_counter()
-            raw = st.write_stream(assistant.generate(prepared, refresh=bool(regenerated)))
-            answer = assistant.finalize(prepared, raw, time.perf_counter() - started)
+            raw = st.write_stream(session.generate(prepared, refresh=bool(regenerated)))
+            answer = session.finalize(prepared, raw, time.perf_counter() - started)
         except BackendError as err:
             st.error(f"{err}")
             st.stop()

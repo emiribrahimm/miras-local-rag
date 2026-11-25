@@ -282,3 +282,18 @@ def test_deleted_doc_drops_out_of_the_filter(app, settings):
     next(b for b in app.sidebar.button if b.label == "Sil").click().run()
     assert not app.exception
     assert app.sidebar.multiselect(key="only_docs").value == ["gobeklitepe.md"]
+
+
+def test_search_settings_apply_to_this_session_only(app, settings):
+    app.sidebar.slider(key="min_similarity").set_value(0.99).run()
+    app.chat_input[0].set_value("Efes nerede?").run()
+    assert not app.exception
+    assert app.chat_message[1].markdown[0].value == ABSTAIN_SENTENCE and app.fake.chat_calls == []
+    answer = app.session_state["history"][0][1]
+    assert answer.search["min_similarity"] == 0.99 and answer.refusal_reason == "low_similarity"
+
+    app.sidebar.slider(key="min_similarity").set_value(settings.min_similarity)
+    app.sidebar.slider(key="top_k").set_value(1).run()
+    app.chat_input[0].set_value("Efes nerede?").run()
+    answer = app.session_state["history"][1][1]
+    assert len(answer.hits) == 1 and not answer.refused
