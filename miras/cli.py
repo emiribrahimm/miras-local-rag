@@ -390,8 +390,16 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
             raise CommandError(f"Bilinmeyen soru: {', '.join(unknown)}")
         questions = [q for q in questions if q["id"] in ids]
         followup_items = [q for q in followup_items if q["id"] in ids]
-    retrieval = evaluation.retrieval_summary(evaluation.evaluate_retrieval(
-        questions, assistant.backend, assistant.retriever, settings.top_k, settings.bm25_weight))
+    # Alt kümelerin raporu tam raporun üzerine yazılmasın.
+    subset = ([f"yalnızca {args.split} soruları"] if args.split else []) + (
+        [f"seçili sorular ({', '.join(ids)})"] if ids else [])
+    suffix = ([args.split] if args.split else []) + (["secili"] if ids else [])
+    retrieval_rows = evaluation.evaluate_retrieval(
+        questions, assistant.backend, assistant.retriever, settings.top_k, settings.bm25_weight)
+    if args.retrieval_only:
+        _retrieval_report(settings, assistant, retrieval_rows, followup_items, subset, suffix)
+        return
+    retrieval = evaluation.retrieval_summary(retrieval_rows)
 
     def show(row: evaluation.AnswerRow) -> None:
         print(f"{'✅' if row.passed else '❌'} {row.id} [{row.seconds:4.1f} sn] {row.question}\n"
@@ -418,18 +426,38 @@ def cmd_eval(args: argparse.Namespace, settings: Settings) -> None:
               "followup_min_similarity": settings.followup_min_similarity,
               "chunks": len(assistant.retriever.chunks)}
     stem = ROOT / "reports" / f"eval-{settings.chat_model}-{settings.chat_device}"
-    # Alt kümelerin raporu tam raporun üzerine yazılmasın.
-    subset = ([f"yalnızca {args.split} soruları"] if args.split else []) + (
-        [f"seçili sorular ({', '.join(ids)})"] if ids else [])
     if subset:
         header["subset"] = ", ".join(subset)
-        stem = stem.with_name("-".join([stem.name] + ([args.split] if args.split else [])
-                                       + (["secili"] if ids else [])))
+        stem = stem.with_name("-".join([stem.name] + suffix))
     evaluation.write_report(stem, header, retrieval, answers, rows, followups, followup_rows)
     print(f"\nGenel: {answers['overall']['passed']}/{answers['overall']['total']}  "
           f"-> {stem}.md")
     if followups:
         print(f"Takip soruları: {followups['overall']['passed']}/{followups['overall']['total']}")
+
+
+def _retrieval_report(settings: Settings, assistant: Assistant, rows: list[evaluation.RetrievalRow],
+                      followup_items: list[dict], subset: list[str], suffix: list[str]) -> None:
+    """`eval --retrieval-only`: yalnızca embedding modeliyle arama raporu, dakikalar yerine saniyeler."""
+    header = {"embed_model": settings.embed_model, "top_k": settings.top_k,
+              "min_similarity": settings.min_similarity, "bm25_weight": settings.bm25_weight,
+              "followup_min_similarity": settings.followup_min_similarity,
+              "chunks": len(assistant.retriever.chunks)}
+    if subset:
+        header["subset"] = ", ".join(subset)
+    stem = ROOT / "reports" / "-".join([f"arama-{settings.embed_model}"] + suffix)
+    follow = evaluation.followup_retrieval(followup_items, assistant) if followup_items else []
+    summary = evaluation.write_retrieval_report(stem, header, rows, follow)
+    retrieval, gate = summary["retrieval"], summary["gate"]
+    print(f"Doğru doküman 1. sırada: {retrieval['doc_hit_at_1']:.0%}, ilk {settings.top_k} içinde: "
+          f"{retrieval['doc_hit_at_k']:.0%}, MRR {retrieval['mrr']:.3f}")
+    print(f"Kapı ({settings.min_similarity}): cevaplanabilir geçen "
+          f"{gate['answerable_passing']['passed']}/{gate['answerable_passing']['total']}, konu dışı kalan "
+          f"{gate['out_of_domain_gated']['passed']}/{gate['out_of_domain_gated']['total']}")
+    if follow:
+        carried = summary["followups"]["carried_when_answerable"]
+        print(f"Takip sorularında konu taşındı: {carried['passed']}/{carried['total']}")
+    print(f"-> {stem}.md")
 
 
 def cmd_compare_reports(args: argparse.Namespace, settings: Settings) -> None:
@@ -713,6 +741,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="Yalnızca bu bölümün soruları (takip seti atlanır, rapor adına eklenir)")
     p.add_argument("--ids", metavar="ID,ID",
                    help="Yalnızca bu sorular, ör. a01,f03 (ana set ve takip seti; rapor adına -secili eklenir)")
+    p.add_argument("--retrieval-only", action="store_true",
+                   help="Sohbet modelini yükleme; yalnızca arama ve kapı ölçülür (reports/arama-...)")
     p.set_defaults(func=cmd_eval)
 
     p = sub.add_parser("compare-reports", help="İki eval raporunu karşılaştır (model çağırmaz)")

@@ -416,3 +416,16 @@ def test_doctor_prints_checks_and_fails_on_errors(run, monkeypatch):
     monkeypatch.setattr(doctor, "check_sdk", lambda: doctor.Check("error", "foundry-local-sdk", "yok"))
     code, out, err = run("doctor")
     assert code == 1 and "✗ foundry-local-sdk" in out and "1 hata, 1 uyarı." in err
+
+
+def test_eval_retrieval_only_never_calls_the_chat_model(run, eval_root, backend, settings):
+    import json
+
+    code, out, _ = run("eval", "--retrieval-only")
+    assert code == 0 and backend.chat_calls == []
+    assert out.startswith("Doğru doküman 1. sırada: ") and "Takip sorularında konu taşındı: " in out
+    report = json.loads((eval_root / "reports" / f"arama-{backend.embed_model}.json").read_text(encoding="utf-8"))
+    assert [r["id"] for r in report["rows"]] == ["a01", "a02", "o01", "n01", "o02"]
+    assert not (eval_root / "reports" / "eval-qwen2.5-7b-cpu.json").exists()
+    run("eval", "--retrieval-only", "--split", "dev")
+    assert (eval_root / "reports" / f"arama-{backend.embed_model}-dev.md").exists()
