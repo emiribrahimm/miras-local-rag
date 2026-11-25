@@ -65,6 +65,16 @@ def test_health_reports_models_and_index(call):
     status, data = call("/health")
     assert status == 200 and data["status"] == "ok"
     assert data["chat_model"] == "fake-chat" and data["docs"] == 2 and data["chunks"] == 3
+    assert data["cached_answers"] is None  # bu asistanın veritabanı yok
+
+
+def test_health_counts_cache_and_log(start, assistant, store):
+    assistant.cache = store
+    call = start()
+    call("/ask", {"question": "Efes nerede?"})
+    call("/ask", {"question": "Pizza hamuru tarifi nedir?"})
+    data = call("/health")[1]
+    assert (data["cached_answers"], data["logged_questions"], data["refused_questions"]) == (1, 2, 1)
 
 
 def test_ask_returns_the_same_shape_as_ask_json(call, backend):

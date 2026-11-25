@@ -74,10 +74,18 @@ class Api:
         }
 
     def health(self, _body: dict) -> dict:
+        """Modeller, indeks ve veritabanı sayıları. Kilit beklemez: uzun bir cevap üretilirken de
+        hemen döner (yalnızca okuma yapılır)."""
         a = self.assistant
-        return {"status": "ok", "chat_model": a.backend.chat_model, "embed_model": a.backend.embed_model,
-                "docs": len({c.filename for c in a.retriever.chunks}), "chunks": len(a.retriever.chunks),
-                "top_k": a.settings.top_k, "min_similarity": a.settings.min_similarity}
+        result = {"status": "ok", "chat_model": a.backend.chat_model, "embed_model": a.backend.embed_model,
+                  "docs": len({c.filename for c in a.retriever.chunks}), "chunks": len(a.retriever.chunks),
+                  "top_k": a.settings.top_k, "min_similarity": a.settings.min_similarity,
+                  "cached_answers": None, "logged_questions": None, "refused_questions": None}
+        if a.cache is not None:
+            logged, refused = a.cache.query_counts()
+            result.update(cached_answers=a.cache.cache_size(), logged_questions=logged,
+                          refused_questions=refused)
+        return result
 
     def docs(self, _body: dict) -> dict:
         """İndeksteki dokümanlar; `docs` alanına verilebilecek dosya adları ve takma adlar."""
