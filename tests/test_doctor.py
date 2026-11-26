@@ -71,3 +71,15 @@ def test_files_without_text_are_a_warning(settings):
     (settings.docs_dir / "menu.html").write_text("<nav>Ana sayfa</nav><script>x()</script>", encoding="utf-8")
     checks = doctor.check_docs(settings)
     assert checks[-1] == doctor.Check("warn", "boş dosya", "İçinden metin çıkmayan dosyalar: menu.html")
+
+
+def test_config_file_is_reported(tmp_path, monkeypatch):
+    from miras import config
+
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "miras.toml")
+    monkeypatch.setattr(config, "FILE_VALUES", {})
+    assert doctor.check_config_file().message.endswith("yok; varsayılanlar ve MIRAS_* geçerli")
+    (tmp_path / "miras.toml").write_text("# top_k = 4\n", encoding="utf-8")
+    assert "boş" in doctor.check_config_file().message
+    monkeypatch.setattr(config, "FILE_VALUES", {"top_k": "6", "bm25_weight": "0.2"})
+    assert doctor.check_config_file().message.endswith("miras.toml: bm25_weight, top_k")

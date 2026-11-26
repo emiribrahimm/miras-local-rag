@@ -11,6 +11,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import config
 from .chunking import chunk_document
 from .config import Settings
 from .ingest import _doc_files, _document, pending_changes
@@ -113,6 +114,16 @@ def check_settings(settings: Settings) -> list[Check]:
                                              f"takip tabanı {settings.followup_min_similarity}")]
 
 
+def check_config_file() -> Check:
+    """Hangi ayar dosyasının okunduğu; bozuk dosya içe aktarırken zaten hata verir."""
+    path = config.CONFIG_PATH
+    if config.FILE_VALUES:
+        return Check("ok", "ayar dosyası", f"{path}: {', '.join(sorted(config.FILE_VALUES))}")
+    if path.is_file():
+        return Check("ok", "ayar dosyası", f"{path} var ama boş (her satır yorum olabilir)")
+    return Check("ok", "ayar dosyası", f"{path} yok; varsayılanlar ve MIRAS_* geçerli")
+
+
 def run_checks(settings: Settings) -> list[Check]:
-    return [check_python(), check_sdk(), check_models(), *check_docs(settings), *check_index(settings),
-            *check_settings(settings)]
+    return [check_python(), check_sdk(), check_models(), check_config_file(), *check_docs(settings),
+            *check_index(settings), *check_settings(settings)]
