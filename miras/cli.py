@@ -97,9 +97,35 @@ def _answer_streaming(assistant: Assistant, question: str, verbose: bool,
     return answer
 
 
+# `ingest --watch` turları arasında beklenen fonksiyon; testlerde değiştirilir.
+WATCH_SLEEP = time.sleep
+
+
 def cmd_ingest(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
-    report = ingest(store, _backend(settings), settings, rebuild=args.rebuild, on_progress=_status)
+    backend = _backend(settings)
+    _ingest_once(store, backend, settings, args.rebuild)
+    if not getattr(args, "watch", False):
+        return
+    print(f"\n{settings.docs_dir} izleniyor ({args.interval:g} sn arayla); durdurmak için Ctrl+C.",
+          flush=True)
+    try:
+        while True:
+            WATCH_SLEEP(args.interval)
+            # Yalnızca dosya özetleri karşılaştırılır; değişiklik yoksa model hiç çalışmaz.
+            if not pending_changes(store, settings):
+                continue
+            print(f"\n{datetime.now():%H:%M:%S} klasörde değişiklik var", flush=True)
+            try:
+                _ingest_once(store, backend, settings, rebuild=False)
+            except FileNotFoundError as err:
+                print(f"Uyarı: {err}", file=sys.stderr, flush=True)
+    except KeyboardInterrupt:
+        print()
+
+
+def _ingest_once(store: Store, backend, settings: Settings, rebuild: bool) -> None:
+    report = ingest(store, backend, settings, rebuild=rebuild, on_progress=_status)
     docs, chunks = store.counts()
     print(f"Eklenen/güncellenen: {len(report.added)}, değişmeyen: {len(report.unchanged)}, "
           f"silinen: {len(report.removed)}")
@@ -771,6 +797,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("ingest", help="Dokümanları parçala, göm ve SQLite'a yaz")
     p.add_argument("--rebuild", action="store_true", help="İndeksi sıfırdan kur")
+    p.add_argument("--watch", action="store_true",
+                   help="Bitince klasörü izle, dosya eklenince/değişince/silinince yeniden indeksle")
+    p.add_argument("--interval", type=float, default=2.0, metavar="SN",
+                   help="--watch için kaç saniyede bir bakılsın (varsayılan: 2)")
     p.set_defaults(func=cmd_ingest)
 
     p = sub.add_parser("add-wiki", help="Türkçe Vikipedi maddesini indir ve indeksle (internet gerekir)")

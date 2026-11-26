@@ -561,3 +561,22 @@ def test_log_since_filters_by_date(run, store):
     assert [r["question"] for r in data["rows"]] == ["Efes nerede?"] and data["total"] == 2
     code, _, err = run("log", "--since", "dün")
     assert code == 1 and "--since tarih olmalı" in err
+
+
+def test_ingest_watch_reindexes_changes_until_ctrl_c(run, settings, store, monkeypatch):
+    rounds = []
+
+    def fake_sleep(seconds):
+        rounds.append(seconds)  # 1. tur: değişiklik yok, ingest çalışmamalı
+        if len(rounds) == 2:
+            (settings.docs_dir / "ani.md").write_text("# Ani\n\nKars ilinde.", encoding="utf-8")
+        elif len(rounds) == 3:
+            (settings.docs_dir / "efes.md").unlink()
+        elif len(rounds) == 4:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "WATCH_SLEEP", fake_sleep)
+    code, out, _ = run("ingest", "--watch", "--interval", "0.5")
+    assert code == 0 and rounds == [0.5] * 4
+    assert "izleniyor (0.5 sn arayla)" in out and out.count("klasörde değişiklik var") == 2
+    assert {d["filename"] for d in store.documents()} == {"ani.md", "gobeklitepe.md"}
