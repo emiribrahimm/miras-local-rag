@@ -503,3 +503,11 @@ def test_feedback_json(run, store):
     assert (data["up"], data["down"]) == (1, 1) and [r["key"] for r in data["rows"]] == ["k1"]
     assert data["rows"][0]["carried"] == ["Efes"]
     assert len(json.loads(run("feedback", "--json", "--all")[1])["rows"]) == 2
+
+
+def test_chat_gecmis_lists_this_sessions_questions(chat, backend):
+    backend.reply = "Efes İzmir'dedir [K1]."
+    out = chat("geçmiş", "Efes nerede?", "Orası ne zaman kuruldu?", "Pizza hamuru tarifi nedir?", "gecmis", "çık")
+    assert "Henüz soru yok." in out
+    assert " 1. ✓ Efes nerede?\n 2. ✓ Orası ne zaman kuruldu?  (konu: Efes)\n" in out
+    assert " 3. ✗ Pizza hamuru tarifi nedir?" in out

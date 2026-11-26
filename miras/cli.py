@@ -269,13 +269,25 @@ def _show_chunks(answer: Answer | None, which: str) -> None:
         print(hit.chunk.text)
 
 
+def _show_turns(turns: list[tuple[str, Answer]]) -> None:
+    """Bu oturumun soruları; `kaynak` ve `kaydet`ten önce neyin sorulduğu hatırlansın."""
+    if not turns:
+        print("Henüz soru yok.")
+        return
+    for number, (question, answer) in enumerate(turns, start=1):
+        mark = "✗" if answer.refused else "✓"
+        carried = f"  (konu: {', '.join(answer.carried)})" if answer.carried else ""
+        print(f"{number:>2}. {mark} {question}{carried}")
+
+
 def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     print("Miras — Türkiye'nin UNESCO Dünya Mirası alanları asistanı. Çıkmak için 'çık' yazın.")
     print("Alan adı geçmeyen sorular önceki sorunun konusuyla sorulur; sıfırlamak için 'yeni' yazın.")
     print("Sohbeti Markdown olarak kaydetmek için 'kaydet [dosya.md]', son cevabın parçalarını "
           "tam okumak için 'kaynak [K2]' yazın.")
-    print("Aramayı bazı alanlarla sınırlamak için 'sadece efes, troya', kaldırmak için 'sadece' yazın.")
+    print("Aramayı bazı alanlarla sınırlamak için 'sadece efes, troya', kaldırmak için 'sadece' yazın; "
+          "bu oturumun soruları için 'geçmiş'.")
     save_history = _chat_history(CHAT_HISTORY)
     last: Answer | None = None
     turns: list[tuple[str, Answer]] = []
@@ -298,6 +310,9 @@ def cmd_chat(args: argparse.Namespace, settings: Settings) -> None:
                 continue
             if command.lower() == "kaynak":
                 _show_chunks(turns[-1][1] if turns else None, target.strip())
+                continue
+            if question.lower() in {"geçmiş", "gecmis"}:
+                _show_turns(turns)
                 continue
             if command.lower() == "sadece":
                 try:
