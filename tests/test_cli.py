@@ -580,3 +580,15 @@ def test_ingest_watch_reindexes_changes_until_ctrl_c(run, settings, store, monke
     assert code == 0 and rounds == [0.5] * 4
     assert "izleniyor (0.5 sn arayla)" in out and out.count("klasörde değişiklik var") == 2
     assert {d["filename"] for d in store.documents()} == {"ani.md", "gobeklitepe.md"}
+
+
+def test_cache_clear_older_than_keeps_recent_answers(run, store):
+    store.cache_answer("eski", "Eski [K1].")
+    store.conn.execute("UPDATE answer_cache SET created = 0")
+    store.conn.commit()
+    store.cache_answer("yeni", "Yeni [K1].")
+    out = run("cache", "--clear", "--older-than", "30")[1]
+    assert out == "Önbellekten 30 günden eski 1 cevap silindi, 1 cevap kaldı.\n"
+    assert store.cached_answer("yeni") == "Yeni [K1]."
+    code, _, err = run("cache", "--older-than", "30")
+    assert code == 1 and "--older-than yalnızca --clear ile" in err

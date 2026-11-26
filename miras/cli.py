@@ -757,7 +757,13 @@ def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
 
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
-    if args.clear:
+    if args.older_than is not None and not args.clear:
+        raise CommandError("--older-than yalnızca --clear ile kullanılır.")
+    if args.clear and args.older_than is not None:
+        removed = store.clear_answer_cache(older_than=time.time() - args.older_than * 86400)
+        print(f"Önbellekten {args.older_than:g} günden eski {removed} cevap silindi, "
+              f"{store.cache_size()} cevap kaldı.")
+    elif args.clear:
         print(f"Önbellekten {store.clear_answer_cache()} cevap silindi.")
     else:
         print(f"Önbellekte {store.cache_size()} cevap var -> {settings.db_path}")
@@ -908,6 +914,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")
     p.add_argument("--clear", action="store_true", help="Önbelleği boşalt")
+    p.add_argument("--older-than", type=float, metavar="GÜN",
+                   help="--clear ile: yalnızca bu kadar günden eski cevapları sil")
     p.set_defaults(func=cmd_cache)
 
     p = sub.add_parser("serve", help="Yerel HTTP API başlat (POST /ask, /search; GET /docs, /health)")

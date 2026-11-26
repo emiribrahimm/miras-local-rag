@@ -160,10 +160,15 @@ class Store:
     def cache_size(self) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0]
 
-    def clear_answer_cache(self) -> int:
-        """Önbelleği boşaltır, silinen cevap sayısını döner. İndeks ve oylar kalır."""
+    def clear_answer_cache(self, older_than: float | None = None) -> int:
+        """Önbelleği boşaltır, silinen cevap sayısını döner. İndeks ve oylar kalır.
+
+        `older_than` (Unix zamanı) verilirse yalnızca o andan önce kaydedilen cevaplar silinir.
+        """
         with self.conn:
-            return self.conn.execute("DELETE FROM answer_cache").rowcount
+            if older_than is None:
+                return self.conn.execute("DELETE FROM answer_cache").rowcount
+            return self.conn.execute("DELETE FROM answer_cache WHERE created < ?", (older_than,)).rowcount
 
     # --- geri bildirim -------------------------------------------------------
     # İndeksten bağımsız kullanıcı verisi: `clear()` (ingest --rebuild) bunlara dokunmaz.
