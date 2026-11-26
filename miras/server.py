@@ -18,6 +18,7 @@ from urllib.parse import parse_qs
 from .backends import BackendError
 from .export import answer_json, search_json
 from .pipeline import Assistant
+from .retrieval import Retriever
 
 # Soru en fazla 1000 karakter; bundan büyük gövde okunmadan reddedilir.
 MAX_BODY_BYTES = 64 * 1024
@@ -75,6 +76,12 @@ class Api:
             ("POST", "/search"): self.search,
         }
 
+    def _refresh(self) -> None:
+        """İndeks başka bir süreçte (`ingest --watch` gibi) değiştiyse aramayı yeniler. Kilit içinde."""
+        store = self.assistant.cache
+        if store is not None and self.assistant.retriever.is_stale(store):
+            self.assistant.retriever = Retriever(store, self.assistant.backend.embed_model)
+
     def health(self, _body: dict) -> dict:
         """Modeller, indeks ve veritabanı sayıları. Kilit beklemez: uzun bir cevap üretilirken de
         hemen döner (yalnızca okuma yapılır)."""
@@ -91,6 +98,8 @@ class Api:
 
     def docs(self, _body: dict) -> dict:
         """İndeksteki dokümanlar; `docs` alanına verilebilecek dosya adları ve takma adlar."""
+        with self.lock:
+            self._refresh()
         found: dict[str, dict] = {}
         for c in self.assistant.retriever.chunks:
             doc = found.setdefault(c.filename, {"filename": c.filename, "title": c.title,
@@ -118,6 +127,7 @@ class Api:
         """Modele gidecek parçalar ve kapının kararı; sohbet modeli çağrılmaz (`search` komutu gibi)."""
         question = _question(body)
         with self.lock:
+            self._refresh()
             docs = _docs(self.assistant, body)
             prepared = self.assistant.prepare(question, docs=docs)
             mentioned = self.assistant.retriever.mentioned_titles(prepared.question)
@@ -132,6 +142,7 @@ class Api:
         question = _question(body)
         refresh = bool(body.get("refresh"))
         with self.lock:
+            self._refresh()
             docs = _docs(self.assistant, body)
             prepared = self.assistant.prepare(question, docs=docs, topic=_topic(self.assistant, body))
         if body.get("stream"):

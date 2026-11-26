@@ -239,3 +239,16 @@ def test_log_endpoint_lists_logged_questions(start, assistant, store):
     refused = call("/log?refused=1&n=5")[1]
     assert [r["refusal_reason"] for r in refused["rows"]] == ["low_similarity"]
     assert call("/log?n=x")[0] == 400
+
+
+def test_server_picks_up_an_index_changed_elsewhere(start, assistant, store, backend, settings):
+    from miras.ingest import ingest
+
+    assistant.cache = store
+    call = start()
+    assert len(call("/docs")[1]["docs"]) == 2
+    (settings.docs_dir / "ani.md").write_text("---\ntitle: Ani\n---\n\nAni Kars ilindedir.", encoding="utf-8")
+    ingest(store, backend, settings)
+    assert [d["filename"] for d in call("/docs")[1]["docs"]] == ["ani.md", "efes.md", "gobeklitepe.md"]
+    data = call("/search", {"question": "Ani hangi ilde?"})[1]
+    assert data["hits"][0]["filename"] == "ani.md"
