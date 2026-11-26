@@ -138,6 +138,11 @@ def cmd_update_wiki(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
+    if args.question == "-":
+        # Uzun ya da başka bir komuttan gelen soru: `echo "Ani nerede?" | main.py ask -`
+        args.question = sys.stdin.read()
+        if not args.question.strip():
+            raise CommandError("Standart girdide soru yok.")
     assistant = _assistant(settings)
     docs = _docs(assistant, args.doc)
     if args.json:
@@ -759,7 +764,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_update_wiki)
 
     p = sub.add_parser("ask", help="Tek bir soru sor")
-    p.add_argument("question")
+    p.add_argument("question", help="Soru; - ise standart girdiden okunur")
     p.add_argument("-v", "--verbose", action="store_true", help="Parça metinlerini ve süreleri göster")
     p.add_argument("--json", action="store_true", help="Cevabı ve kaynakları JSON olarak yaz (akış yok)")
     p.add_argument("--refresh", action="store_true",

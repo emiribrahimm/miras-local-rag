@@ -521,3 +521,16 @@ def test_remove_doc_takes_several_files_and_checks_them_first(run, settings, bac
     assert run("remove-doc", "efes.md", "ani.md", "gobeklitepe.md")[0] == 1  # hepsi silinemez
     code, out, _ = run("remove-doc", "efes.md", "ani.md")
     assert code == 0 and out == "Silindi: efes.md, ani.md. Veritabanı: 1 doküman, 2 parça\n"
+
+
+def test_ask_reads_the_question_from_stdin(run, backend, monkeypatch):
+    import io
+    import json
+
+    backend.reply = "Efes İzmir'dedir [K1]."
+    monkeypatch.setattr("sys.stdin", io.StringIO("Efes\nnerede?\n"))
+    data = json.loads(run("ask", "--json", "-")[1])
+    assert data["answer"] == backend.reply and "SORU: Efes nerede?" in backend.chat_calls[0][1]["content"]
+    monkeypatch.setattr("sys.stdin", io.StringIO("  \n"))
+    code, _, err = run("ask", "-")
+    assert code == 1 and "Standart girdide soru yok." in err
