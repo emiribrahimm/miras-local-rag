@@ -367,3 +367,10 @@ def test_html_documents_are_converted_and_indexed(store, backend, settings):
     chunks = [c for c in Retriever(store, backend.embed_model).chunks if c.filename == "ani.html"]
     assert [c.section for c in chunks] == ["Ani", "Ani › Kiliseler"]
     assert "Menü" not in " ".join(c.text for c in chunks) and "x()" not in chunks[0].text
+
+
+def test_new_files_without_text_are_reported(store, backend, settings):
+    (settings.docs_dir / "bos.html").write_text("<html><script>x()</script><nav>Menü</nav></html>",
+                                                encoding="utf-8")
+    report = ingest(store, backend, settings)
+    assert report.skipped == ["bos.html: içinden metin çıkmadı, atlandı."] and report.added == []

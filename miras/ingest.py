@@ -25,7 +25,8 @@ class IngestReport:
     unchanged: list[str]
     removed: list[str]
     chunks_embedded: int
-    # Okunamayan dosyalar ("x.md: UTF-8 olarak okunamadı"); indeksteki eski halleri korunur.
+    # Okunamayan ya da metin çıkmayan dosyalar ("x.md: UTF-8 olarak okunamadı"); indeksteki eski
+    # halleri korunur.
     skipped: list[str] = field(default_factory=list)
 
 
@@ -86,6 +87,8 @@ def ingest(store: Store, backend: Backend, settings: Settings, *, rebuild: bool 
             if path.name in known:
                 store.delete_document(path.name)
                 report.removed.append(path.name)
+            else:
+                report.skipped.append(f"{path.name}: içinden metin çıkmadı, atlandı.")
             continue
         todo.append((path.name, doc, fingerprint, chunks))
 
