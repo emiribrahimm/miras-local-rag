@@ -18,6 +18,8 @@ ENV_FIELDS = ("docs_dir", "db_path", "chat_model", "embed_model", "chat_device",
               "min_similarity", "bm25_weight", "followup_min_similarity", "answer_cache",
               "query_log")
 
+PATH_FIELDS = {"docs_dir", "db_path"}
+
 CONFIG_PATH = Path(os.environ.get("MIRAS_CONFIG", str(ROOT / "miras.toml")))
 
 
@@ -36,8 +38,12 @@ def load_config_file(path: Path) -> dict[str, str]:
     if unknown:
         raise ValueError(f"{path}: bilinmeyen ayar {', '.join(unknown)}. "
                          f"Kullanılabilenler: {', '.join(ENV_FIELDS)}")
-    return {name: ("1" if value else "0") if isinstance(value, bool) else str(value)
-            for name, value in data.items()}
+    values = {name: ("1" if value else "0") if isinstance(value, bool) else str(value)
+              for name, value in data.items()}
+    # Göreli yollar dosyanın klasörüne göre: komut hangi dizinden çalışırsa çalışsın aynı yer.
+    for name in PATH_FIELDS & values.keys():
+        values[name] = str((path.parent / values[name]).resolve())
+    return values
 
 
 FILE_VALUES = load_config_file(CONFIG_PATH)

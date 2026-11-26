@@ -74,3 +74,13 @@ def test_env_beats_the_config_file_and_errors_name_the_source(monkeypatch):
     assert config._env_number("BM25_WEIGHT", "0.0", float) == 0.1
     with pytest.raises(ValueError, match="miras.toml içindeki top_k bir tam sayı olmalı, 'dört'"):
         config._env_number("TOP_K", "4", int)
+
+
+def test_relative_paths_in_the_config_file_follow_the_file(tmp_path):
+    from miras.config import load_config_file
+
+    path = tmp_path / "ayar" / "miras.toml"
+    path.parent.mkdir()
+    path.write_text('docs_dir = "../belgeler"\ndb_path = "/tmp/m.db"\n', encoding="utf-8")
+    values = load_config_file(path)
+    assert values["docs_dir"] == str((tmp_path / "belgeler").resolve()) and values["db_path"] == "/tmp/m.db"
