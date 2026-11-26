@@ -429,3 +429,12 @@ def test_eval_retrieval_only_never_calls_the_chat_model(run, eval_root, backend,
     assert not (eval_root / "reports" / "eval-qwen2.5-7b-cpu.json").exists()
     run("eval", "--retrieval-only", "--split", "dev")
     assert (eval_root / "reports" / f"arama-{backend.embed_model}-dev.md").exists()
+
+
+def test_search_json_matches_the_api_shape(run, backend):
+    import json
+
+    data = json.loads(run("search", "--json", "Göbeklitepe mi Efes mi daha eski?")[1])
+    assert data["mentioned"] == ["Efes", "Göbeklitepe"] and data["passes_threshold"] is True
+    assert data["hits"][0]["label"] == "K1" and "text" in data["hits"][0]
+    assert backend.chat_calls == []

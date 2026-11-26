@@ -16,7 +16,7 @@ from pathlib import Path
 from . import doctor, evaluation
 from .backends import BackendError, FoundryBackend
 from .config import ENV_FIELDS, ROOT, SETTINGS, Settings, env_name
-from .export import answer_json, conversation_markdown
+from .export import answer_json, conversation_markdown, search_json
 from .feedback import eval_candidates, refused_candidates
 from .ingest import ingest, pending_changes, remove_document, save_uploads
 from .pipeline import Answer, Assistant
@@ -186,9 +186,12 @@ def cmd_search(args: argparse.Namespace, settings: Settings) -> None:
     prepared = assistant.prepare(args.question, docs=docs)
     if prepared.refusal_reason == "empty":
         raise CommandError("Bir soru yazın.")
+    mentioned = assistant.retriever.mentioned_titles(prepared.question)
+    if args.json:
+        print(json.dumps(search_json(prepared, mentioned, settings), ensure_ascii=False, indent=2))
+        return
     if docs:
         print(f"Yalnızca şu dokümanlarda aranıyor: {', '.join(sorted(docs))}")
-    mentioned = assistant.retriever.mentioned_titles(prepared.question)
     if mentioned:
         quota = ", her alandan en az bir parça" if len(mentioned) > 1 else ""
         print(f"Soruda geçen alanlar: {', '.join(sorted(mentioned))} "
@@ -719,6 +722,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("question")
     p.add_argument("-k", type=int, help="Kaç parça getirilsin (varsayılan: top_k)")
     p.add_argument("--chars", type=int, default=200, help="Parça metninden gösterilecek karakter")
+    p.add_argument("--json", action="store_true", help="Sonucu JSON olarak yaz (POST /search ile aynı)")
     p.add_argument("--doc", action="append", metavar="AD",
                    help="Yalnızca bu dokümanda ara (dosya adı, başlık ya da takma ad; tekrarlanabilir, "
                         "virgülle de ayrılabilir)")

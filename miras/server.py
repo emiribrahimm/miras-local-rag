@@ -15,7 +15,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .backends import BackendError
-from .export import answer_json
+from .export import answer_json, search_json
 from .pipeline import Assistant
 
 # Soru en fazla 1000 karakter; bundan büyük gövde okunmadan reddedilir.
@@ -104,14 +104,7 @@ class Api:
             docs = _docs(self.assistant, body)
             prepared = self.assistant.prepare(question, docs=docs)
             mentioned = self.assistant.retriever.mentioned_titles(prepared.question)
-        return {"question": prepared.question, "mentioned": sorted(mentioned), "docs": list(prepared.docs),
-                "best_score": round(max(h.score for h in prepared.hits), 3),
-                "min_similarity": self.assistant.settings.min_similarity,
-                "passes_threshold": prepared.refusal_reason is None,
-                "hits": [{"label": f"K{i}", "filename": h.chunk.filename, "section": h.chunk.section,
-                          "score": round(h.score, 3), "text": h.chunk.text}
-                         for i, h in enumerate(prepared.hits, start=1)],
-                "retrieval_seconds": round(prepared.retrieval_seconds, 3)}
+        return search_json(prepared, mentioned, self.assistant.settings)
 
     def ask(self, body: dict) -> dict | Iterator[dict]:
         """Sunucu sohbet tutmaz: takip sorusu için son cevabın `topic` alanı geri gönderilir.

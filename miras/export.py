@@ -7,7 +7,7 @@ from datetime import datetime
 
 from .config import Settings
 from .feedback import answer_sources
-from .pipeline import Answer, changed_search
+from .pipeline import Answer, Prepared, changed_search
 
 
 def _sources(answer: Answer) -> tuple[list[str], bool]:
@@ -77,6 +77,18 @@ def answer_json(question: str, answer: Answer, settings: Settings) -> dict:
             "cached": answer.cached, "sources": sources, "chat_model": settings.chat_model,
             "retrieval_seconds": round(answer.retrieval_seconds, 3),
             "generation_seconds": round(answer.generation_seconds, 3)}
+
+
+def search_json(prepared: Prepared, mentioned: set[str], settings: Settings) -> dict:
+    """Arama sonucu: parçalar, skorlar, tanınan alan adları ve kapının kararı (model çağrılmaz)."""
+    return {"question": prepared.question, "mentioned": sorted(mentioned), "docs": list(prepared.docs),
+            "best_score": round(max(h.score for h in prepared.hits), 3),
+            "min_similarity": settings.min_similarity,
+            "passes_threshold": prepared.refusal_reason is None,
+            "hits": [{"label": f"K{i}", "filename": h.chunk.filename, "section": h.chunk.section,
+                      "score": round(h.score, 3), "text": h.chunk.text}
+                     for i, h in enumerate(prepared.hits, start=1)],
+            "retrieval_seconds": round(prepared.retrieval_seconds, 3)}
 
 
 def conversation_json(history: list[tuple[str, Answer]], settings: Settings, now: datetime) -> str:
