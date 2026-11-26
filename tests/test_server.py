@@ -226,3 +226,16 @@ def test_each_request_is_reported(start):
     assert sorted(line.rsplit(" ", 2)[0] for line in lines) == ["GET /docs 401", "GET /health 200",
                                                                 "OPTIONS /ask 204"]
     assert all(line.endswith(" ms") for line in lines)
+
+
+def test_log_endpoint_lists_logged_questions(start, assistant, store):
+    assert start()("/log")[0] == 404  # veritabanı olmayan asistan
+    assistant.cache = store
+    call = start()
+    call("/ask", {"question": "Efes nerede?"})
+    call("/ask", {"question": "Pizza hamuru tarifi nedir?"})
+    data = call("/log")[1]
+    assert (data["total"], data["refused"]) == (2, 1) and data["rows"][0]["question"].startswith("Pizza")
+    refused = call("/log?refused=1&n=5")[1]
+    assert [r["refusal_reason"] for r in refused["rows"]] == ["low_similarity"]
+    assert call("/log?n=x")[0] == 400

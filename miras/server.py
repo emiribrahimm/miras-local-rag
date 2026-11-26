@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable, Iterator
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs
 
 from .backends import BackendError
 from .export import answer_json, search_json
@@ -69,6 +70,7 @@ class Api:
         self.routes: dict[tuple[str, str], Callable[[dict], dict | Iterator[dict]]] = {
             ("GET", "/health"): self.health,
             ("GET", "/docs"): self.docs,
+            ("GET", "/log"): self.log,
             ("POST", "/ask"): self.ask,
             ("POST", "/search"): self.search,
         }
@@ -96,6 +98,21 @@ class Api:
                                                 "chunks": 0})
             doc["chunks"] += 1
         return {"docs": sorted(found.values(), key=lambda d: (d["title"], d["filename"]))}
+
+    def log(self, query: dict) -> dict:
+        """Soru günlüğü, yeniden eskiye: `?refused=1` yalnızca reddedilenler, `?n=50` kaç kayıt."""
+        if self.assistant.cache is None:
+            raise RequestError(HTTPStatus.NOT_FOUND, "Bu sunucuda soru günlüğü yok.")
+        try:
+            limit = int(query.get("n", 20))
+        except ValueError:
+            raise RequestError(HTTPStatus.BAD_REQUEST, "'n' bir tam sayı olmalı.") from None
+        total, refused = self.assistant.cache.query_counts()
+        rows = self.assistant.cache.query_rows(refused=query.get("refused") in ("1", "true"),
+                                               limit=max(limit, 0))
+        return {"total": total, "refused": refused,
+                "rows": [{**r, "carried": list(r["carried"]), "docs": list(r["docs"]),
+                          "cited": list(r["cited"])} for r in rows]}
 
     def search(self, body: dict) -> dict:
         """Modele gidecek parçalar ve kapının kararı; sohbet modeli çağrılmaz (`search` komutu gibi)."""
@@ -210,7 +227,7 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
                     if any(p == path for _, p in api.routes):
                         raise RequestError(HTTPStatus.METHOD_NOT_ALLOWED, f"{path} için {method} kullanılmaz.")
                     raise RequestError(HTTPStatus.NOT_FOUND, f"{method} {path} yok.")
-                result = route(self._body() if method == "POST" else {})
+                result = route(self._body() if method == "POST" else self._query())
                 if isinstance(result, dict):
                     self._send(HTTPStatus.OK, result)
                 else:
@@ -222,6 +239,11 @@ def make_server(assistant: Assistant, host: str = "127.0.0.1", port: int = 8765,
                 self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": str(err)})
             except Exception as err:  # sunucu tek bir bozuk istek yüzünden düşmesin
                 self._send(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"{type(err).__name__}: {err}"})
+
+        def _query(self) -> dict:
+            """GET parametreleri; aynı ad birden çok verilirse sonuncusu."""
+            _, _, query = self.path.partition("?")
+            return {name: values[-1] for name, values in parse_qs(query).items()}
 
         def _authorized(self) -> bool:
             given = self.headers.get("Authorization", "")
