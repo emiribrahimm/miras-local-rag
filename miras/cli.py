@@ -660,6 +660,7 @@ def cmd_remove_doc(args: argparse.Namespace, settings: Settings) -> None:
 
 def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
     """Geçerli ayarlar ve nereden geldikleri (config.py, MIRAS_* ya da komut satırı)."""
+    rows = []
     for field in dataclasses.fields(settings):
         value = getattr(settings, field.name)
         if value != getattr(SETTINGS, field.name):
@@ -670,7 +671,13 @@ def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
             origin = f"varsayılan ({env_name(field.name)})"
         else:
             origin = "varsayılan (yalnızca config.py)"
-        print(f"{field.name:<24} {str(value):<28} {origin}")
+        rows.append((field.name, value, origin))
+    if args.json:
+        print(json.dumps({name: {"value": str(value) if isinstance(value, Path) else value, "origin": origin}
+                          for name, value, origin in rows}, ensure_ascii=False, indent=2))
+        return
+    for name, value, origin in rows:
+        print(f"{name:<24} {str(value):<28} {origin}")
 
 
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
@@ -814,6 +821,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_remove_doc)
 
     p = sub.add_parser("config", help="Geçerli ayarları ve nereden geldiklerini göster")
+    p.add_argument("--json", action="store_true", help="JSON olarak yaz")
     p.set_defaults(func=cmd_config)
 
     p = sub.add_parser("cache", help="Cevap önbelleğindeki kayıt sayısı (model çağırmaz)")

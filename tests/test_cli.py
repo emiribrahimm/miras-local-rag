@@ -484,3 +484,11 @@ def test_doctor_json_keeps_the_exit_code(run, monkeypatch, capsys):
     data = json.loads(out)
     assert code == 0 and data["ok"] is True
     assert {"level": "ok", "name": "foundry-local-sdk", "message": "kurulu"} in data["checks"]
+
+
+def test_config_json(run):
+    import json
+
+    data = json.loads(run("--model", "phi-4-mini", "config", "--json")[1])
+    assert data["chat_model"] == {"value": "phi-4-mini", "origin": "komut satırı"}
+    assert data["top_k"]["value"] == 2 and isinstance(data["db_path"]["value"], str)
