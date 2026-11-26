@@ -114,8 +114,17 @@ class Store:
         return dict(self.conn.execute("SELECT filename, fingerprint FROM documents"))
 
     def delete_document(self, filename: str) -> None:
-        self.conn.execute("DELETE FROM documents WHERE filename = ?", (filename,))
-        self.conn.commit()
+        with self.conn:
+            self.conn.execute("DELETE FROM documents WHERE filename = ?", (filename,))
+            self._touch_index()
+
+    def _touch_index(self) -> None:
+        """İndeks değişti: başka süreçlerdeki aramalar (web arayüzü, API) bunu görüp yenilenir."""
+        self.conn.execute("INSERT INTO meta(key, value) VALUES('index_version', ?) "
+                          "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (str(time.time_ns()),))
+
+    def index_version(self) -> str:
+        return self.get_meta("index_version") or ""
 
     def clear(self) -> None:
         self.conn.executescript("DELETE FROM documents; DELETE FROM meta; DELETE FROM answer_cache;")
@@ -134,6 +143,7 @@ class Store:
                 "INSERT INTO chunks(doc_id, position, section, text, embedding) VALUES(?, ?, ?, ?, ?)",
                 [(doc_id, i, sections[i], texts[i], embeddings[i].astype(np.float32).tobytes())
                  for i in range(len(texts))])
+            self._touch_index()
 
     # --- cevap önbelleği ---------------------------------------------------
     def cached_answer(self, key: str) -> str | None:

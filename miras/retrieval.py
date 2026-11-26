@@ -91,6 +91,8 @@ class Retriever:
 
     def __init__(self, store: Store, embed_model: str) -> None:
         indexed_with = store.get_meta("embed_model")
+        # Yüklenen indeksin sürümü; `is_stale` başka bir sürecin indeksi değiştirdiğini anlar.
+        self.version = store.index_version()
         self.chunks, self.matrix = store.load_all()
         if not self.chunks:
             raise IndexError_("İndeks boş. Önce `python main.py ingest` çalıştırın.")
@@ -103,6 +105,10 @@ class Retriever:
         self._titles = np.array(titles, dtype=object)
         self._filenames = np.array([c.filename for c in self.chunks], dtype=object)
         self._bm25 = BM25([f"{c.section}\n{c.text}" for c in self.chunks])
+
+    def is_stale(self, store: Store) -> bool:
+        """Bu arama yüklendikten sonra indeks değişti mi (ör. `ingest --watch` başka bir süreçte)."""
+        return store.index_version() != self.version
 
     def all_terms_known(self, query: str, titles: tuple[str, ...] | None = None) -> bool:
         """Sorunun bütün içerik kökleri bilgi tabanında (`titles` verilirse yalnızca o alanların

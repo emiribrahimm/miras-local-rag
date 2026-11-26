@@ -374,3 +374,16 @@ def test_new_files_without_text_are_reported(store, backend, settings):
                                                 encoding="utf-8")
     report = ingest(store, backend, settings)
     assert report.skipped == ["bos.html: içinden metin çıkmadı, atlandı."] and report.added == []
+
+
+def test_retriever_notices_when_the_index_changes(store, backend, settings):
+    retriever = Retriever(store, backend.embed_model)
+    assert not retriever.is_stale(store)
+    ingest(store, backend, settings)  # değişen dosya yok
+    assert not retriever.is_stale(store)
+    (settings.docs_dir / "ani.md").write_text("# Ani\n\nKars ilinde.", encoding="utf-8")
+    ingest(store, backend, settings)
+    assert retriever.is_stale(store) and not Retriever(store, backend.embed_model).is_stale(store)
+    fresh = Retriever(store, backend.embed_model)
+    store.delete_document("ani.md")
+    assert fresh.is_stale(store)
