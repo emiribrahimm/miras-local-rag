@@ -603,6 +603,10 @@ def cmd_doctor(args: argparse.Namespace, settings: Settings) -> None:
 
 def cmd_docs(args: argparse.Namespace, settings: Settings) -> None:
     docs = Store(settings.db_path).documents()
+    if args.json:
+        print(json.dumps({"docs": [{**d, "aliases": list(d["aliases"])} for d in docs]},
+                         ensure_ascii=False, indent=2))
+        return
     if not docs:
         print("İndeks boş. Önce `python main.py ingest` çalıştırın.")
         return
@@ -775,6 +779,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("docs", help="İndeksteki dokümanları listele (model çağırmaz)")
+    p.add_argument("--json", action="store_true", help="JSON olarak yaz (GET /docs ile aynı)")
     p.set_defaults(func=cmd_docs)
 
     p = sub.add_parser("remove-doc", help="Dokümanı klasörden ve indeksten sil (model çağırmaz)")

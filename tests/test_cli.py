@@ -438,3 +438,11 @@ def test_search_json_matches_the_api_shape(run, backend):
     assert data["mentioned"] == ["Efes", "Göbeklitepe"] and data["passes_threshold"] is True
     assert data["hits"][0]["label"] == "K1" and "text" in data["hits"][0]
     assert backend.chat_calls == []
+
+
+def test_docs_json(run):
+    import json
+
+    data = json.loads(run("docs", "--json")[1])
+    assert [d["filename"] for d in data["docs"]] == ["efes.md", "gobeklitepe.md"]
+    assert data["docs"][0]["aliases"] == ["Ephesos", "Ephesus"] and data["docs"][1]["chunks"] == 2
