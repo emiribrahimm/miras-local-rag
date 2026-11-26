@@ -65,3 +65,9 @@ def test_settings_that_disable_safeguards_are_flagged(settings):
     high_floor = doctor.check_settings(dataclasses.replace(settings, followup_min_similarity=0.5,
                                                            min_similarity=0.5))
     assert "followup_min_similarity" in high_floor[0].message
+
+
+def test_files_without_text_are_a_warning(settings):
+    (settings.docs_dir / "menu.html").write_text("<nav>Ana sayfa</nav><script>x()</script>", encoding="utf-8")
+    checks = doctor.check_docs(settings)
+    assert checks[-1] == doctor.Check("warn", "boş dosya", "İçinden metin çıkmayan dosyalar: menu.html")

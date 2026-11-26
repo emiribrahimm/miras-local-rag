@@ -11,8 +11,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .chunking import chunk_document
 from .config import Settings
-from .ingest import _doc_files, pending_changes
+from .ingest import _doc_files, _document, pending_changes
 from .store import Store
 
 # Foundry Local SDK modelleri buraya indiriyor (FoundryBackend, app_name="miras-rag").
@@ -56,16 +57,21 @@ def check_docs(settings: Settings) -> list[Check]:
     files = _doc_files(settings.docs_dir)
     if not files:
         return [Check("error", "dokümanlar", f"{settings.docs_dir} içinde .md/.txt/.html dosya yok.")]
-    unreadable = []
+    unreadable, empty = [], []
     for path in files:
         try:
-            path.read_text(encoding="utf-8-sig")
+            raw = path.read_text(encoding="utf-8-sig")
         except UnicodeDecodeError:
             unreadable.append(path.name)
+            continue
+        if not chunk_document(_document(path, raw), settings.chunk_target_chars, settings.chunk_max_chars):
+            empty.append(path.name)
     checks = [Check("ok", "dokümanlar", f"{len(files)} dosya: {settings.docs_dir}")]
     if unreadable:
         checks.append(Check("warn", "kodlama", "UTF-8 olmayan, ingest'in atlayacağı dosyalar: "
                                               + ", ".join(unreadable)))
+    if empty:
+        checks.append(Check("warn", "boş dosya", "İçinden metin çıkmayan dosyalar: " + ", ".join(empty)))
     return checks
 
 
