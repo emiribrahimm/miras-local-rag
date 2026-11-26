@@ -140,7 +140,7 @@ In the web UI, "Sohbeti indir (.md)" in the sidebar saves the conversation as a 
 with the cited chunks and their Wikipedia links under each answer, and "Sohbeti indir (.json)"
 saves the same turns with similarity scores and supporting sentences. In `chat`, `kaydet` does the
 Markdown version (`kaydet notlar/ani.md` to pick the file), `kaynak` prints the full chunks behind
-the last answer (`kaynak K2` for one of them), and the up arrow brings back questions from earlier
+the last answer (`kaynak K2` for one of them), `geçmiş` lists the questions of the session, and the up arrow brings back questions from earlier
 sessions (kept in `~/.miras-rag/chat_history`).
 
 Since answers are cached, a bad one would keep coming back. "Yeniden üret" under the last answer
@@ -151,7 +151,7 @@ given to the old answer is kept separately.
 `#` are skipped, `-` reads from stdin) and writes one JSON object per answer, in the same shape as
 `ask --json`. Questions don't carry topics from one line to the next.
 
-For scripts, `search`, `docs`, `log`, `status` and `doctor` take `--json` too. `search --json` and
+For scripts, `search`, `docs`, `log`, `status`, `doctor`, `config` and `feedback` take `--json` too. `search --json` and
 `docs --json` have the same shape as `POST /search` and `GET /docs` in the API below, and
 `doctor --json` still exits with 1 when a check fails.
 
@@ -175,7 +175,8 @@ curl -s localhost:8765/health
 `POST /ask` answers in the same shape as `ask --json`, plus `docs` and `topic`. With
 `"stream": true` it sends NDJSON instead: one `{"delta": "..."}` line per piece as the model writes,
 then `{"done": true, ...}` with the checked answer (citations cleaned, sources), or an `{"error": ...}`
-line if the model fails halfway. `/health` also reports the cached answers and logged questions. The server keeps no
+line if the model fails halfway. `/health` also reports the cached answers and logged questions,
+and `GET /log?refused=1&n=50` returns the question log. The server keeps no
 conversation: to ask a follow-up, send back the `topic` of the previous answer. `POST /search`
 returns the chunks, their similarity, the site names it spotted and whether the question passes the
 threshold, without calling the chat model. Errors come back as `{"error": "..."}` with 400 (bad
@@ -460,7 +461,8 @@ Web arayüzünde kenar çubuğundaki "Sohbeti indir (.md)" sohbeti Markdown dosy
 her cevabın altında atıf yapılan parçalar ve Vikipedi bağlantıları da yer alıyor. "Sohbeti indir
 (.json)" aynı turları benzerlik skorları ve destekleyen cümlelerle birlikte yazıyor. `chat` içinde
 `kaydet` Markdown halini kaydediyor (dosyayı seçmek için `kaydet notlar/ani.md`), `kaynak` son
-cevabın dayandığı parçaları tam metinle basıyor (tek bir parça için `kaynak K2`); yukarı ok tuşu da
+cevabın dayandığı parçaları tam metinle basıyor (tek bir parça için `kaynak K2`), `geçmiş` oturumun
+sorularını listeliyor; yukarı ok tuşu da
 önceki oturumlardaki soruları getiriyor (`~/.miras-rag/chat_history` içinde tutuluyor).
 
 Cevaplar önbelleğe alındığı için kötü bir cevap da her seferinde geri gelirdi. Web arayüzünde son
@@ -471,7 +473,7 @@ cevabı değiştiriyor; eski cevaba verilen oy ayrı olarak kalıyor.
 atlanıyor, `-` verilirse standart girdiden okuyor) ve her cevap için `ask --json` biçiminde bir JSON
 satırı yazıyor. Satırlar arasında konu taşınmıyor.
 
-Betikler için `search`, `docs`, `log`, `status` ve `doctor` da `--json` alıyor. `search --json` ve
+Betikler için `search`, `docs`, `log`, `status`, `doctor`, `config` ve `feedback` da `--json` alıyor. `search --json` ve
 `docs --json` aşağıdaki API'deki `POST /search` ve `GET /docs` ile aynı biçimde; `doctor --json`
 bir kontrol başarısız olunca yine 1 ile bitiyor.
 
@@ -497,7 +499,7 @@ curl -s localhost:8765/health
 `"stream": true` verilirse NDJSON gönderiyor: model yazdıkça parça başına bir `{"delta": "..."}`
 satırı, sonda da doğrulanmış cevapla (temizlenmiş atıflar, kaynaklar) `{"done": true, ...}`; model
 yarıda hata verirse son satır `{"error": ...}` oluyor. `/health` önbellekteki cevap ve günlükteki
-soru sayılarını da veriyor. Sunucu
+soru sayılarını da veriyor, `GET /log?refused=1&n=50` soru günlüğünü döndürüyor. Sunucu
 sohbet tutmuyor; takip sorusu için önceki cevabın `topic` alanı geri gönderiliyor. `POST /search`
 sohbet modelini çağırmadan parçaları, benzerliklerini, tanıdığı alan adlarını ve sorunun eşiği geçip
 geçmediğini döndürüyor. Hatalar `{"error": "..."}` olarak geliyor: 400 (bozuk JSON, boş soru,
