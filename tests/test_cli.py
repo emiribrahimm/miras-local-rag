@@ -492,3 +492,14 @@ def test_config_json(run):
     data = json.loads(run("--model", "phi-4-mini", "config", "--json")[1])
     assert data["chat_model"] == {"value": "phi-4-mini", "origin": "komut satırı"}
     assert data["top_k"]["value"] == 2 and isinstance(data["db_path"]["value"], str)
+
+
+def test_feedback_json(run, store):
+    import json
+
+    store.save_feedback("k1", -1, "Efes nerede?", ("Efes",), "Bilmiyorum.", "model", [], "m")
+    store.save_feedback("k2", 1, "Ani nerede?", (), "Kars [K1].", None, [], "m")
+    data = json.loads(run("feedback", "--json")[1])
+    assert (data["up"], data["down"]) == (1, 1) and [r["key"] for r in data["rows"]] == ["k1"]
+    assert data["rows"][0]["carried"] == ["Efes"]
+    assert len(json.loads(run("feedback", "--json", "--all")[1])["rows"]) == 2

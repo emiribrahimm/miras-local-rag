@@ -494,6 +494,12 @@ def cmd_compare_reports(args: argparse.Namespace, settings: Settings) -> None:
 def cmd_feedback(args: argparse.Namespace, settings: Settings) -> None:
     rows = Store(settings.db_path).feedback_rows()
     up = sum(r["rating"] > 0 for r in rows)
+    if args.json:
+        shown = rows if args.all else [r for r in rows if r["rating"] < 0]
+        print(json.dumps({"up": up, "down": len(rows) - up, "rows": [
+            {**r, "created": datetime.fromtimestamp(r["created"]).isoformat(timespec="seconds"),
+             "carried": list(r["carried"])} for r in shown]}, ensure_ascii=False, indent=2))
+        return
     print(f"👍 {up}  👎 {len(rows) - up}")
     for row in rows if args.all else [r for r in rows if r["rating"] < 0]:
         when = datetime.fromtimestamp(row["created"])
@@ -793,6 +799,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--all", action="store_true", help="Beğenilen cevapları da göster")
     p.add_argument("--export", type=Path, metavar="DOSYA",
                    help="Beğenilmeyen soruları eval adayı olarak JSON'a yaz")
+    p.add_argument("--json", action="store_true", help="Oyları JSON olarak yaz")
     p.set_defaults(func=cmd_feedback)
 
     p = sub.add_parser("log", help="Sorulan soruları ve reddedilenleri listele (model çağırmaz)")
