@@ -117,6 +117,7 @@ uv run python main.py ask --refresh "Ani hangi ilde?"   # skip the cached answer
 uv run python main.py ask --doc efes "Tiyatro kaç kişilik?"   # only search some documents
 uv run python main.py ask-batch sorular.txt --out cevaplar.jsonl   # one question per line
 uv run python main.py ingest --rebuild
+uv run python main.py ingest --watch        # keep indexing as files in data/docs/ change
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # needs internet
 uv run python main.py update-wiki --check   # which articles changed on Wikipedia, needs internet
 uv run python main.py calibrate             # re-measure the similarity threshold
@@ -248,7 +249,10 @@ least one document is left. Files edited or deleted by hand while the web UI is 
 warning in the sidebar with an "İndeksi güncelle" button, and `status` lists them too. The answer
 cache can be emptied with "Önbelleği temizle" there or `cache --clear`. "Dokümanı incele" shows
 the chunks a document was split into, with their heading paths, and the web UI shows a progress
-bar while new chunks are being embedded.
+bar while new chunks are being embedded. `ingest --watch` stays running after indexing and
+re-indexes whenever a file is added, changed or deleted (`--interval` seconds between checks, 2 by
+default). The web UI and `serve` notice when the index was changed by another process and reload
+it, so they don't keep searching the old chunks.
 
 Turkish Wikipedia articles can be added by name or link, with "Vikipedi'den ekle" in the sidebar
 or `add-wiki`. The article is downloaded, converted the same way as the ones in `data/docs/`
@@ -445,6 +449,7 @@ uv run python main.py ask --refresh "Ani hangi ilde?"   # önbelleği atla, mode
 uv run python main.py ask --doc efes "Tiyatro kaç kişilik?"   # yalnızca bazı dokümanlarda ara
 uv run python main.py ask-batch sorular.txt --out cevaplar.jsonl   # satır başına bir soru
 uv run python main.py ingest --rebuild
+uv run python main.py ingest --watch        # data/docs/ değiştikçe indekslemeye devam et
 uv run python main.py add-wiki "Sümela Manastırı" --aliases "Sumela"   # internet gerekir
 uv run python main.py update-wiki --check   # Vikipedi'de değişen maddeler, internet gerekir
 uv run python main.py calibrate             # benzerlik eşiğini yeniden ölç
@@ -580,6 +585,10 @@ düzenlenen ya da silinen dosyalar kenar çubuğunda "İndeksi güncelle" düğm
 olarak çıkıyor, `status` da bunları listeliyor. Cevap önbelleği oradaki "Önbelleği temizle" ya da
 `cache --clear` ile boşaltılabiliyor. "Dokümanı incele" bir dokümanın hangi parçalara bölündüğünü
 başlık yollarıyla gösteriyor; yeni parçalar gömülürken web arayüzünde bir ilerleme çubuğu çıkıyor.
+`ingest --watch` indeksledikten sonra açık kalıyor ve bir dosya eklenince, değişince ya da silinince
+yeniden indeksliyor (`--interval` kontroller arası saniye, varsayılan 2). Web arayüzü ve `serve`
+indeksin başka bir süreçte değiştiğini fark edip yeniden yüklüyor, eski parçalarla aramaya devam
+etmiyor.
 
 Türkçe Vikipedi maddeleri adıyla ya da bağlantısıyla da eklenebiliyor: kenar çubuğunda
 "Vikipedi'den ekle" ya da `add-wiki`. Madde indirilip `data/docs/` içindekilerle aynı şekilde
