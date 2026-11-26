@@ -129,7 +129,7 @@ uv run python main.py feedback              # thumbs down answers from the web U
 uv run python main.py log --refused         # questions that were refused, from every interface
 uv run python main.py status                # index, cache, votes, files not indexed yet
 uv run python main.py docs                  # what's in the index
-uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index
+uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index (several at once too)
 uv run python main.py cache --clear         # empty the answer cache
 uv run python main.py config                # effective settings and where each one comes from
 uv run python main.py serve                 # local HTTP API on 127.0.0.1:8765
@@ -151,7 +151,7 @@ given to the old answer is kept separately.
 `#` are skipped, `-` reads from stdin) and writes one JSON object per answer, in the same shape as
 `ask --json`. Questions don't carry topics from one line to the next.
 
-For scripts, `search`, `docs`, `log`, `status`, `doctor`, `config` and `feedback` take `--json` too. `search --json` and
+For scripts, `ask -` reads the question from stdin, and `search`, `docs`, `log`, `status`, `doctor`, `config` and `feedback` take `--json` too. `search --json` and
 `docs --json` have the same shape as `POST /search` and `GET /docs` in the API below, and
 `doctor --json` still exits with 1 when a check fails.
 
@@ -204,7 +204,7 @@ questions that carried a topic are marked with `carried` and belong in `followup
 Votes only cover answers someone bothered to rate, so every question is also logged (CLI, web UI
 and API, but not `eval`): the question as typed, the carried topic, the document filter, why it
 was refused if it was, the best similarity and which files were cited. Answer texts aren't kept.
-`log` shows the latest ones (`-n 50`), `log --refused` only the refusals, which is the quickest way
+`log` shows the latest ones (`-n 50`, `--since 2026-11-01`), `log --refused` only the refusals, which is the quickest way
 to see what people ask that the documents don't cover, and `log --export reports/log-candidates.json`
 writes those in the `questions.json` format. The latest refusals are also under "Reddedilen sorular"
 in the web UI sidebar. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it off and
@@ -450,7 +450,7 @@ uv run python main.py feedback              # web arayüzünde 👎 verilen ceva
 uv run python main.py log --refused         # reddedilen sorular, bütün arayüzlerden
 uv run python main.py status                # indeks, önbellek, oylar, indekslenmemiş dosyalar
 uv run python main.py docs                  # indeksteki dokümanlar
-uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil
+uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil (birden çok da olur)
 uv run python main.py cache --clear         # cevap önbelleğini boşalt
 uv run python main.py config                # geçerli ayarlar ve her birinin nereden geldiği
 uv run python main.py serve                 # 127.0.0.1:8765 üzerinde yerel HTTP API
@@ -473,7 +473,7 @@ cevabı değiştiriyor; eski cevaba verilen oy ayrı olarak kalıyor.
 atlanıyor, `-` verilirse standart girdiden okuyor) ve her cevap için `ask --json` biçiminde bir JSON
 satırı yazıyor. Satırlar arasında konu taşınmıyor.
 
-Betikler için `search`, `docs`, `log`, `status`, `doctor`, `config` ve `feedback` da `--json` alıyor. `search --json` ve
+Betikler için `ask -` soruyu standart girdiden okuyor; `search`, `docs`, `log`, `status`, `doctor`, `config` ve `feedback` da `--json` alıyor. `search --json` ve
 `docs --json` aşağıdaki API'deki `POST /search` ve `GET /docs` ile aynı biçimde; `doctor --json`
 bir kontrol başarısız olunca yine 1 ile bitiyor.
 
@@ -528,7 +528,7 @@ taşınmış sorular `carried` alanıyla işaretli, onların yeri `followups.jso
 Oylar yalnızca birinin değerlendirdiği cevapları kapsadığı için her soru ayrıca günlüğe yazılıyor
 (CLI, web arayüzü ve API; `eval` hariç): yazıldığı haliyle soru, taşınan konu, doküman kısıtı,
 reddedildiyse sebebi, en iyi benzerlik ve atıf yapılan dosyalar. Cevap metinleri saklanmıyor. `log`
-son soruları gösteriyor (`-n 50`), `log --refused` yalnızca reddedilenleri; dokümanların kapsamadığı
+son soruları gösteriyor (`-n 50`, `--since 2026-11-01`), `log --refused` yalnızca reddedilenleri; dokümanların kapsamadığı
 ne sorulduğunu görmenin en hızlı yolu bu. `log --export reports/log-adaylar.json` bunları
 `questions.json` biçiminde yazıyor. Son reddedilenler web arayüzünde kenar çubuğundaki "Reddedilen
 sorular" bölümünde de görünüyor. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
