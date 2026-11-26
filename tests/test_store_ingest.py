@@ -387,3 +387,17 @@ def test_retriever_notices_when_the_index_changes(store, backend, settings):
     fresh = Retriever(store, backend.embed_model)
     store.delete_document("ani.md")
     assert fresh.is_stale(store)
+
+
+def test_user_data_round_trips_and_imports_once(store, tmp_path):
+    store.save_feedback("k1", -1, "Efes nerede?", ("Efes",), "Bilmiyorum.", "model", [{"a": 1}], "m")
+    store.log_query("Pizza?", (), (), "low_similarity", 0.1, [], False, "m")
+    data = store.export_user_data()
+    assert data["feedback"][0]["key"] == "k1" and data["queries"][0]["question"] == "Pizza?"
+
+    other = Store(tmp_path / "baska.db")
+    assert other.import_user_data(data) == {"feedback": 1, "queries": 1}
+    assert other.import_user_data(data) == {"feedback": 0, "queries": 0}  # iki kez yüklemek zararsız
+    assert other.feedback_rows()[0]["carried"] == ("Efes",) and other.query_counts() == (1, 1)
+    with pytest.raises(ValueError, match="eksik alan: key"):
+        other.import_user_data({"feedback": [{"rating": 1}]})

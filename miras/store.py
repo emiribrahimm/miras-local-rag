@@ -243,6 +243,42 @@ class Store:
         with self.conn:
             return self.conn.execute("DELETE FROM queries").rowcount
 
+    # --- kullanıcı verisi yedeği ---------------------------------------------
+    USER_TABLES = {"feedback": ("key", "created", "rating", "question", "carried", "answer",
+                                "refusal_reason", "sources", "chat_model"),
+                   "queries": ("created", "question", "carried", "docs", "refusal_reason", "top_score",
+                               "cited", "cached", "chat_model")}
+
+    def export_user_data(self) -> dict[str, list[dict]]:
+        """Oylar ve soru günlüğü, tablodaki ham halleriyle; indeks ve önbellek yeniden üretilebilir."""
+        result = {}
+        for table, columns in self.USER_TABLES.items():
+            cursor = self.conn.execute(f"SELECT {', '.join(columns)} FROM {table} ORDER BY rowid")
+            result[table] = [dict(zip(columns, row)) for row in cursor]
+        return result
+
+    def import_user_data(self, data: dict[str, list[dict]]) -> dict[str, int]:
+        """Yedeği geri yükler, tablo başına eklenen satır sayısını döner. Zaten olan satırlar
+        (aynı oy anahtarı; aynı an ve soru) atlanır, yani aynı yedek iki kez yüklenebilir."""
+        added = {}
+        with self.conn:
+            for table, columns in self.USER_TABLES.items():
+                rows = data.get(table, [])
+                missing = [c for c in columns if any(c not in row for row in rows)]
+                if missing:
+                    raise ValueError(f"Yedekteki {table} satırlarında eksik alan: {', '.join(missing)}")
+                before = self.conn.total_changes
+                for row in rows:
+                    if table == "queries" and self.conn.execute(
+                            "SELECT 1 FROM queries WHERE created = ? AND question = ?",
+                            (row["created"], row["question"])).fetchone():
+                        continue
+                    self.conn.execute(
+                        f"INSERT OR IGNORE INTO {table}({', '.join(columns)}) "
+                        f"VALUES({', '.join('?' * len(columns))})", [row[c] for c in columns])
+                added[table] = self.conn.total_changes - before
+        return added
+
     # --- okuma ------------------------------------------------------------
     def counts(self) -> tuple[int, int]:
         docs = self.conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
