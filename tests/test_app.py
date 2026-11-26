@@ -311,3 +311,4 @@ def test_refused_questions_are_listed_in_the_sidebar(app):
     refused = [m.value for m in app.sidebar.markdown if "Pizza hamuru" in m.value]
     assert len(refused) == 1 and "_(kapıda, " in refused[0]
     assert not any("Efes nerede?" in m.value for m in app.sidebar.markdown)
+    assert any(b.label == "Eval adayı olarak indir (.json)" for b in app.sidebar.get("download_button"))

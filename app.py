@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import json
 import time
 import uuid
 from collections import Counter
@@ -15,7 +16,7 @@ from miras.backends import BackendError, FoundryBackend
 from miras.config import SETTINGS
 from miras.export import conversation_json, conversation_markdown
 from miras.highlight import emphasize
-from miras.feedback import save_vote
+from miras.feedback import refused_candidates, save_vote
 from miras.ingest import ingest, pending_changes, remove_document, save_uploads
 from miras.pipeline import Answer, Assistant, changed_search
 from miras.retrieval import IndexError_, Retriever
@@ -227,6 +228,7 @@ def render_refused_questions() -> None:
     try:
         total, refused = store.query_counts()
         rows = store.query_rows(refused=True, limit=10)
+        candidates = refused_candidates(store.query_rows(refused=True)) if refused else []
     finally:
         store.close()
     if not SETTINGS.query_log:
@@ -239,6 +241,11 @@ def render_refused_questions() -> None:
         st.markdown(f"- {when:%d.%m %H:%M} · {row['question']} "
                     f"_({REFUSAL_LABELS.get(row['refusal_reason'], row['refusal_reason'])}, "
                     f"{row['top_score']:.2f})_")
+    if candidates:
+        st.download_button("Eval adayı olarak indir (.json)",
+                           json.dumps(candidates, ensure_ascii=False, indent=2) + "\n",
+                           file_name="log-adaylar.json", mime="application/json",
+                           help="questions.json biçiminde; type, doc ve expected elle doldurulur.")
 
 
 def record_vote(key: str, turn: int) -> None:
