@@ -46,3 +46,31 @@ def test_env_fields_match_the_variables_read_in_config():
     names = {f.name for f in dataclasses.fields(SETTINGS)}
     for field in ENV_FIELDS:
         assert field in names and f'("{field.upper()}"' in source
+
+
+def test_config_file_values_and_errors(tmp_path):
+    from miras.config import load_config_file
+
+    path = tmp_path / "miras.toml"
+    assert load_config_file(path) == {}
+    path.write_text('top_k = 6\nmin_similarity = 0.5\nanswer_cache = false\nchat_model = "phi-4-mini"\n',
+                    encoding="utf-8")
+    assert load_config_file(path) == {"top_k": "6", "min_similarity": "0.5", "answer_cache": "0",
+                                      "chat_model": "phi-4-mini"}
+    path.write_text("top-k = 6\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="bilinmeyen ayar top-k. Kullanılabilenler: docs_dir"):
+        load_config_file(path)
+    path.write_text("top_k = \n", encoding="utf-8")
+    with pytest.raises(ValueError, match="okunamadı"):
+        load_config_file(path)
+
+
+def test_env_beats_the_config_file_and_errors_name_the_source(monkeypatch):
+    import miras.config as config
+
+    monkeypatch.setattr(config, "FILE_VALUES", {"top_k": "dört", "bm25_weight": "0.3"})
+    assert config._env_number("BM25_WEIGHT", "0.0", float) == 0.3
+    monkeypatch.setenv("MIRAS_BM25_WEIGHT", "0.1")
+    assert config._env_number("BM25_WEIGHT", "0.0", float) == 0.1
+    with pytest.raises(ValueError, match="miras.toml içindeki top_k bir tam sayı olmalı, 'dört'"):
+        config._env_number("TOP_K", "4", int)

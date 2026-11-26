@@ -1,26 +1,67 @@
-"""Tüm ayarlar tek yerde. Ortam değişkenleriyle (MIRAS_*) ezilebilir."""
+"""Tüm ayarlar tek yerde. `miras.toml` dosyasıyla ve ortam değişkenleriyle (MIRAS_*) ezilebilir.
+
+Öncelik: komut satırı > MIRAS_* > miras.toml > bu dosyadaki varsayılan.
+"""
 
 from __future__ import annotations
 
 import os
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# MIRAS_<AD> ortam değişkeniyle ve miras.toml'daki <ad> anahtarıyla ezilebilen alanlar; geri
+# kalanı yalnızca bu dosyadan değişir.
+ENV_FIELDS = ("docs_dir", "db_path", "chat_model", "embed_model", "chat_device", "top_k",
+              "min_similarity", "bm25_weight", "followup_min_similarity", "answer_cache",
+              "query_log")
+
+CONFIG_PATH = Path(os.environ.get("MIRAS_CONFIG", str(ROOT / "miras.toml")))
+
+
+def load_config_file(path: Path) -> dict[str, str]:
+    """miras.toml'daki ayarlar, ortam değişkenleriyle aynı biçimde (metin). Dosya yoksa boş.
+
+    Tanınmayan bir anahtar ("top-k", "esik") sessizce yok sayılmasın diye hata verir.
+    """
+    if not path.is_file():
+        return {}
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as err:
+        raise ValueError(f"{path} okunamadı: {err}") from None
+    unknown = sorted(set(data) - set(ENV_FIELDS))
+    if unknown:
+        raise ValueError(f"{path}: bilinmeyen ayar {', '.join(unknown)}. "
+                         f"Kullanılabilenler: {', '.join(ENV_FIELDS)}")
+    return {name: ("1" if value else "0") if isinstance(value, bool) else str(value)
+            for name, value in data.items()}
+
+
+FILE_VALUES = load_config_file(CONFIG_PATH)
+
+
+def _source(name: str) -> str:
+    """Bir ayarın değeri nereden okunduysa onun adı; hata mesajlarında gösterilir."""
+    if f"MIRAS_{name}" in os.environ or name.lower() not in FILE_VALUES:
+        return f"MIRAS_{name}"
+    return f"{CONFIG_PATH.name} içindeki {name.lower()}"
+
 
 def _env(name: str, default: str) -> str:
-    return os.environ.get(f"MIRAS_{name}", default)
+    return os.environ.get(f"MIRAS_{name}", FILE_VALUES.get(name.lower(), default))
 
 
 def _env_number(name: str, default: str, kind: type[int] | type[float]) -> int | float:
-    """Sayısal ortam değişkeni; "abc" gibi değerlerde hangi değişkenin bozuk olduğunu söyler."""
+    """Sayısal ayar; "abc" gibi değerlerde hangi değişkenin (ya da dosya anahtarının) bozuk olduğunu söyler."""
     value = _env(name, default)
     try:
         return kind(value.replace(",", ".") if kind is float else value)
     except ValueError:
         expected = "tam sayı" if kind is int else "sayı"
-        raise ValueError(f"MIRAS_{name} bir {expected} olmalı, '{value}' verildi.") from None
+        raise ValueError(f"{_source(name)} bir {expected} olmalı, '{value}' verildi.") from None
 
 
 @dataclass(frozen=True)
@@ -81,12 +122,6 @@ class Settings:
             problems.append("chunk_target_chars 0'dan büyük ve chunk_max_chars'tan küçük olmalı")
         if problems:
             raise ValueError("Geçersiz ayar: " + "; ".join(problems))
-
-
-# MIRAS_<AD> ortam değişkeniyle ezilebilen alanlar; geri kalanı yalnızca bu dosyadan değişir.
-ENV_FIELDS = ("docs_dir", "db_path", "chat_model", "embed_model", "chat_device", "top_k",
-              "min_similarity", "bm25_weight", "followup_min_similarity", "answer_cache",
-              "query_log")
 
 
 def env_name(field: str) -> str:
