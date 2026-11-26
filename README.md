@@ -131,7 +131,8 @@ uv run python main.py log --refused         # questions that were refused, from 
 uv run python main.py status                # index, cache, votes, files not indexed yet
 uv run python main.py docs                  # what's in the index
 uv run python main.py remove-doc efes.md    # delete from data/docs/ and the index (several at once too)
-uv run python main.py cache --clear         # empty the answer cache
+uv run python main.py cache --clear         # empty the answer cache (--older-than 30 for old ones only)
+uv run python main.py backup yedek/miras.json   # votes and the question log, restore puts them back
 uv run python main.py config                # effective settings and where each one comes from
 uv run python main.py serve                 # local HTTP API on 127.0.0.1:8765
 uv run pytest                               # no models needed, ~1s
@@ -208,7 +209,9 @@ and API, but not `eval`): the question as typed, the carried topic, the document
 was refused if it was, the best similarity and which files were cited. Answer texts aren't kept.
 `log` shows the latest ones (`-n 50`, `--since 2026-11-01`), `log --refused` only the refusals, which is the quickest way
 to see what people ask that the documents don't cover, and `log --export reports/log-candidates.json`
-writes those in the `questions.json` format. The latest refusals are also under "Reddedilen sorular"
+writes those in the `questions.json` format. Votes and the log are the only things in the database
+that can't be rebuilt from `data/docs/`, so `backup FILE` writes just those to JSON and
+`restore FILE` adds them back into any database, skipping rows it already has. The latest refusals are also under "Reddedilen sorular"
 in the web UI sidebar, with a button to download the same candidates file. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it off and
 `ingest --rebuild` leaves it alone.
 
@@ -463,7 +466,8 @@ uv run python main.py log --refused         # reddedilen sorular, bütün arayü
 uv run python main.py status                # indeks, önbellek, oylar, indekslenmemiş dosyalar
 uv run python main.py docs                  # indeksteki dokümanlar
 uv run python main.py remove-doc efes.md    # data/docs/'tan ve indeksten sil (birden çok da olur)
-uv run python main.py cache --clear         # cevap önbelleğini boşalt
+uv run python main.py cache --clear         # cevap önbelleğini boşalt (yalnızca eskiler için --older-than 30)
+uv run python main.py backup yedek/miras.json   # oylar ve soru günlüğü, restore geri yükler
 uv run python main.py config                # geçerli ayarlar ve her birinin nereden geldiği
 uv run python main.py serve                 # 127.0.0.1:8765 üzerinde yerel HTTP API
 uv run pytest                               # model gerekmez, ~1 sn
@@ -543,7 +547,9 @@ Oylar yalnızca birinin değerlendirdiği cevapları kapsadığı için her soru
 reddedildiyse sebebi, en iyi benzerlik ve atıf yapılan dosyalar. Cevap metinleri saklanmıyor. `log`
 son soruları gösteriyor (`-n 50`, `--since 2026-11-01`), `log --refused` yalnızca reddedilenleri; dokümanların kapsamadığı
 ne sorulduğunu görmenin en hızlı yolu bu. `log --export reports/log-adaylar.json` bunları
-`questions.json` biçiminde yazıyor. Son reddedilenler web arayüzünde kenar çubuğundaki "Reddedilen
+`questions.json` biçiminde yazıyor. Veritabanında `data/docs/`'tan yeniden üretilemeyen tek şey oylar
+ve günlük olduğu için `backup DOSYA` yalnızca bunları JSON'a yazıyor, `restore DOSYA` da herhangi bir
+veritabanına geri ekliyor; zaten olan satırları atlıyor. Son reddedilenler web arayüzünde kenar çubuğundaki "Reddedilen
 sorular" bölümünde de görünüyor; aynı aday dosyasını indirmek için bir düğme de var. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
 `ingest --rebuild` dokunmuyor.
 
