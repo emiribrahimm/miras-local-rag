@@ -1,5 +1,6 @@
 """Komut satırı arayüzü: ingest, add-wiki, update-wiki, ask, ask-batch, search, chat, eval,
-calibrate, feedback, log, status, doctor, config, docs, remove-doc, cache, compare-reports, serve."""
+calibrate, feedback, log, status, doctor, config, docs, remove-doc, cache, backup, restore,
+compare-reports, serve."""
 
 from __future__ import annotations
 
@@ -755,6 +756,29 @@ def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
     print(f"\nAyar dosyası: {config.CONFIG_PATH} ({state}; başka bir dosya için MIRAS_CONFIG)")
 
 
+def cmd_backup(args: argparse.Namespace, settings: Settings) -> None:
+    """Oylar ve soru günlüğü JSON'a; indeks ve önbellek `ingest` ile yeniden üretilebildiği için yok."""
+    data = Store(settings.db_path).export_user_data()
+    payload = {"miras_backup": 1, "created": datetime.now().isoformat(timespec="seconds"), **data}
+    args.file.parent.mkdir(parents=True, exist_ok=True)
+    args.file.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"{len(data['feedback'])} oy, {len(data['queries'])} soru -> {args.file}")
+
+
+def cmd_restore(args: argparse.Namespace, settings: Settings) -> None:
+    try:
+        data = json.loads(args.file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as err:
+        raise CommandError(f"Yedek okunamadı: {err}") from err
+    if not isinstance(data, dict) or data.get("miras_backup") != 1:
+        raise CommandError(f"{args.file} bir Miras yedeği değil (`backup` ile üretilmeli).")
+    try:
+        added = Store(settings.db_path).import_user_data(data)
+    except ValueError as err:
+        raise CommandError(str(err)) from err
+    print(f"Eklenen: {added['feedback']} oy, {added['queries']} soru (zaten olanlar atlandı).")
+
+
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
     store = Store(settings.db_path)
     if args.older_than is not None and not args.clear:
@@ -927,6 +951,14 @@ def main(argv: list[str] | None = None) -> int:
                    help="Bu adresteki sayfalar tarayıcıdan çağırabilsin, ör. http://localhost:3000 ya da *")
     p.add_argument("--quiet", action="store_true", help="İstekleri ekrana yazma")
     p.set_defaults(func=cmd_serve)
+
+    p = sub.add_parser("backup", help="Oyları ve soru günlüğünü JSON'a yedekle (model çağırmaz)")
+    p.add_argument("file", type=Path, help="Yedek dosyası, ör. yedek/miras.json")
+    p.set_defaults(func=cmd_backup)
+
+    p = sub.add_parser("restore", help="backup ile alınan yedeği geri yükle; olanlar atlanır")
+    p.add_argument("file", type=Path, help="Yedek dosyası")
+    p.set_defaults(func=cmd_restore)
 
     args = parser.parse_args(argv)
     overrides = {"chat_model": args.model, "chat_device": args.device}

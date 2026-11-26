@@ -592,3 +592,20 @@ def test_cache_clear_older_than_keeps_recent_answers(run, store):
     assert store.cached_answer("yeni") == "Yeni [K1]."
     code, _, err = run("cache", "--older-than", "30")
     assert code == 1 and "--older-than yalnızca --clear ile" in err
+
+
+def test_backup_and_restore(run, store, settings, tmp_path, monkeypatch):
+    import json
+
+    run("ask", "Pizza hamuru tarifi nedir?")
+    store.save_feedback("k1", -1, "Efes nerede?", (), "Bilmiyorum.", "model", [], "m")
+    target = tmp_path / "yedek" / "miras.json"
+    assert run("backup", str(target))[1] == f"1 oy, 1 soru -> {target}\n"
+    assert json.loads(target.read_text(encoding="utf-8"))["miras_backup"] == 1
+
+    monkeypatch.setattr(cli, "SETTINGS", dataclasses.replace(cli.SETTINGS, db_path=tmp_path / "yeni.db"))
+    assert run("restore", str(target))[1] == "Eklenen: 1 oy, 1 soru (zaten olanlar atlandı).\n"
+    assert run("restore", str(target))[1].startswith("Eklenen: 0 oy, 0 soru")
+    (tmp_path / "baska.json").write_text("[]", encoding="utf-8")
+    code, _, err = run("restore", str(tmp_path / "baska.json"))
+    assert code == 1 and "bir Miras yedeği değil" in err
