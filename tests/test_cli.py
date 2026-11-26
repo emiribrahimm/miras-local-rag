@@ -532,6 +532,7 @@ def test_ask_reads_the_question_from_stdin(run, backend, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("Efes\nnerede?\n"))
     data = json.loads(run("ask", "--json", "-")[1])
     assert data["answer"] == backend.reply and "SORU: Efes nerede?" in backend.chat_calls[0][1]["content"]
+    assert data["question"] == "Efes nerede?"
     monkeypatch.setattr("sys.stdin", io.StringIO("  \n"))
     code, _, err = run("ask", "-")
     assert code == 1 and "Standart girdide soru yok." in err

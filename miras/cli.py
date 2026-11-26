@@ -140,8 +140,9 @@ def cmd_update_wiki(args: argparse.Namespace, settings: Settings) -> None:
 def cmd_ask(args: argparse.Namespace, settings: Settings) -> None:
     if args.question == "-":
         # Uzun ya da başka bir komuttan gelen soru: `echo "Ani nerede?" | main.py ask -`
-        args.question = sys.stdin.read()
-        if not args.question.strip():
+        # JSON'daki `question` alanı da modele giden soru gibi tek satır olsun.
+        args.question = " ".join(sys.stdin.read().split())
+        if not args.question:
             raise CommandError("Standart girdide soru yok.")
     assistant = _assistant(settings)
     docs = _docs(assistant, args.doc)
