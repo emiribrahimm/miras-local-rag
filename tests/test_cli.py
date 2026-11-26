@@ -457,3 +457,13 @@ def test_log_json(run):
     row = data["rows"][0]
     assert row["question"] == "Pizza hamuru tarifi nedir?" and row["refusal_reason"] == "low_similarity"
     assert row["created"][4] == "-" and row["cited"] == [] and row["cached"] is False
+
+
+def test_status_json(run, settings):
+    import json
+
+    (settings.docs_dir / "ani.md").write_text("# Ani\n\nKars ilinde.", encoding="utf-8")
+    data = json.loads(run("status", "--json")[1])
+    assert (data["docs"], data["chunks"], data["rebuild_needed"]) == (2, 3, False)
+    assert data["pending"] == {"changed": ["ani.md"], "missing": []}
+    assert data["query_log"] == {"enabled": True, "total": 0, "refused": 0}

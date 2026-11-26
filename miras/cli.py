@@ -568,6 +568,18 @@ def cmd_status(args: argparse.Namespace, settings: Settings) -> None:
     indexed_with = store.get_meta("embed_model")
     votes = store.feedback_rows()
     up = sum(r["rating"] > 0 for r in votes)
+    if args.json:
+        logged, refused = store.query_counts()
+        stale = bool(indexed_with) and indexed_with != settings.embed_model
+        pending = None if stale else pending_changes(store, settings)
+        print(json.dumps({
+            "db_path": str(settings.db_path), "docs": docs, "chunks": chunks, "indexed_with": indexed_with,
+            "rebuild_needed": stale, "cached_answers": store.cache_size(),
+            "votes": {"up": up, "down": len(votes) - up},
+            "query_log": {"enabled": settings.query_log, "total": logged, "refused": refused},
+            "pending": None if pending is None else {"changed": pending.changed, "missing": pending.missing},
+        }, ensure_ascii=False, indent=2))
+        return
     print(f"Veritabanı: {settings.db_path}")
     print(f"İndeks: {docs} doküman, {chunks} parça" + (f" ({indexed_with})" if indexed_with else ""))
     print(f"Önbellek: {store.cache_size()} cevap · oylar: 👍 {up}  👎 {len(votes) - up}")
@@ -780,6 +792,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
+    p.add_argument("--json", action="store_true", help="JSON olarak yaz")
     p.set_defaults(func=cmd_status)
 
     p = sub.add_parser("doctor", help="Kurulumu denetle: SDK, modeller, dokümanlar, indeks (model yüklemez)")
