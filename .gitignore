@@ -6,3 +6,5 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 .DS_Store
+# Kişisel ayarlar; örnek için miras.toml.example.
+miras.toml

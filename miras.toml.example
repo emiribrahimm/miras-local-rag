@@ -1,0 +1,18 @@
+# Miras ayarları. Kopyalayıp `miras.toml` adıyla kaydedin; yalnızca değiştirmek istediğiniz
+# satırların başındaki # işaretini kaldırın. MIRAS_* ortam değişkenleri bu dosyayı ezer,
+# `python main.py config` her ayarın nereden geldiğini gösterir.
+
+# docs_dir = "data/docs"
+# db_path = "data/miras.db"
+
+# chat_model = "qwen2.5-7b"
+# embed_model = "qwen3-embedding-0.6b"   # değişirse `ingest --rebuild` gerekir
+# chat_device = "cpu"                     # ya da "gpu"
+
+# top_k = 4
+# min_similarity = 0.53                   # `calibrate` ile ölçüldü
+# bm25_weight = 0.0                       # `tune-hybrid` ile ölçmeden açmayın
+# followup_min_similarity = 0.40
+
+# answer_cache = true
+# query_log = true

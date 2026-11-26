@@ -84,3 +84,18 @@ def test_relative_paths_in_the_config_file_follow_the_file(tmp_path):
     path.write_text('docs_dir = "../belgeler"\ndb_path = "/tmp/m.db"\n', encoding="utf-8")
     values = load_config_file(path)
     assert values["docs_dir"] == str((tmp_path / "belgeler").resolve()) and values["db_path"] == "/tmp/m.db"
+
+
+def test_example_config_lists_every_setting():
+    import re
+
+    from miras.config import ENV_FIELDS, ROOT, load_config_file
+
+    text = (ROOT / "miras.toml.example").read_text(encoding="utf-8")
+    keys = re.findall(r"^# (\w+) = ", text, flags=re.MULTILINE)
+    assert sorted(keys) == sorted(ENV_FIELDS)
+    # Yorumlar kaldırılınca geçerli bir dosya olmalı.
+    uncommented = re.sub(r"^# (\w+ = )", r"\1", text, flags=re.MULTILINE)
+    import tomllib
+    assert sorted(tomllib.loads(uncommented)) == sorted(ENV_FIELDS)
+    assert load_config_file(ROOT / "miras.toml.example") == {}  # her satır yorum
