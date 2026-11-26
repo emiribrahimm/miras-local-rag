@@ -511,3 +511,13 @@ def test_chat_gecmis_lists_this_sessions_questions(chat, backend):
     assert "Henüz soru yok." in out
     assert " 1. ✓ Efes nerede?\n 2. ✓ Orası ne zaman kuruldu?  (konu: Efes)\n" in out
     assert " 3. ✗ Pizza hamuru tarifi nedir?" in out
+
+
+def test_remove_doc_takes_several_files_and_checks_them_first(run, settings, backend, store):
+    (settings.docs_dir / "ani.md").write_text("# Ani\n\nKars ilinde.", encoding="utf-8")
+    run("ingest")
+    code, _, err = run("remove-doc", "efes.md", "yok.md")
+    assert code == 1 and "yok.md ne indekste" in err and (settings.docs_dir / "efes.md").exists()
+    assert run("remove-doc", "efes.md", "ani.md", "gobeklitepe.md")[0] == 1  # hepsi silinemez
+    code, out, _ = run("remove-doc", "efes.md", "ani.md")
+    assert code == 0 and out == "Silindi: efes.md, ani.md. Veritabanı: 1 doküman, 2 parça\n"

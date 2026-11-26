@@ -665,18 +665,22 @@ def cmd_docs(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_remove_doc(args: argparse.Namespace, settings: Settings) -> None:
+    """Önce hepsi denetlenir; biri hatalıysa hiçbiri silinmez."""
     store = Store(settings.db_path)
     indexed = {d["filename"] for d in store.documents()}
-    if args.filename not in indexed and not (settings.docs_dir / args.filename).is_file():
-        raise CommandError(f"{args.filename} ne indekste ne de {settings.docs_dir} içinde.")
-    if indexed <= {args.filename}:
+    names = list(dict.fromkeys(args.filenames))
+    for name in names:
+        if name not in indexed and not (settings.docs_dir / name).is_file():
+            raise CommandError(f"{name} ne indekste ne de {settings.docs_dir} içinde.")
+    if indexed <= set(names):
         raise CommandError("En az bir doküman kalmalı.")  # boş indeksle arama yapılamaz
     try:
-        remove_document(store, settings.docs_dir, args.filename)
+        for name in names:
+            remove_document(store, settings.docs_dir, name)
     except ValueError as err:
         raise CommandError(str(err)) from err
     docs, chunks = store.counts()
-    print(f"Silindi: {args.filename}. Veritabanı: {docs} doküman, {chunks} parça")
+    print(f"Silindi: {', '.join(names)}. Veritabanı: {docs} doküman, {chunks} parça")
 
 
 def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
@@ -839,7 +843,8 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_docs)
 
     p = sub.add_parser("remove-doc", help="Dokümanı klasörden ve indeksten sil (model çağırmaz)")
-    p.add_argument("filename", help="Doküman dosyasının adı, ör. efes.md")
+    p.add_argument("filenames", nargs="+", metavar="filename",
+                   help="Doküman dosyalarının adları, ör. efes.md troya.md")
     p.set_defaults(func=cmd_remove_doc)
 
     p = sub.add_parser("config", help="Geçerli ayarları ve nereden geldiklerini göster")
