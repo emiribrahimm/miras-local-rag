@@ -229,6 +229,8 @@ setting, instead of quietly breaking the search.
 HTML files (`.html`, `.htm`, e.g. a saved web page) are converted to Markdown before chunking,
 with the standard library: the first `<h1>` (or `<title>`) becomes the title, `<h2>` and below
 become sections, and menus, scripts, headers and footers are dropped. The file itself stays as it is.
+A page that has nothing left after that (only a menu, say) is reported by `ingest` and `doctor`
+instead of being skipped silently.
 
 Files have to be UTF-8 (Windows line endings are fine). One that isn't is skipped by `ingest` with
 a warning and its previous version stays in the index; a file emptied down to its header is taken
@@ -552,7 +554,9 @@ hatalı olduğunu söyleyen bir mesajla durduruyor.
 
 HTML dosyaları (`.html`, `.htm`, ör. kaydedilmiş bir web sayfası) parçalanmadan önce standart
 kütüphaneyle Markdown'a çevriliyor: ilk `<h1>` (ya da `<title>`) başlık, `<h2>` ve altı bölüm
-oluyor; menüler, betikler, üst ve alt bilgiler atılıyor. Dosyanın kendisine dokunulmuyor.
+oluyor; menüler, betikler, üst ve alt bilgiler atılıyor. Dosyanın kendisine dokunulmuyor. Bundan
+sonra elinde hiçbir şey kalmayan bir sayfa (sadece menü gibi) sessizce atlanmıyor, `ingest` ve
+`doctor` bunu bildiriyor.
 
 Dosyaların UTF-8 olması gerekiyor (Windows satır sonları sorun değil). UTF-8 olmayan bir dosyayı
 `ingest` uyarı vererek atlıyor ve önceki hali indekste kalıyor; üst bilgisi dışında boşaltılan bir
