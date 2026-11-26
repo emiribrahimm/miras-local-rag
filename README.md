@@ -149,7 +149,8 @@ given to the old answer is kept separately.
 
 `ask-batch` asks every line of a file as a separate question (empty lines and lines starting with
 `#` are skipped, `-` reads from stdin) and writes one JSON object per answer, in the same shape as
-`ask --json`. Questions don't carry topics from one line to the next.
+`ask --json`. Questions don't carry topics from one line to the next. At the end it prints to
+stderr how many were refused and how many came from the cache.
 
 For scripts, `ask -` reads the question from stdin, and `search`, `docs`, `log`, `status`, `doctor`, `config` and `feedback` take `--json` too. `search --json` and
 `docs --json` have the same shape as `POST /search` and `GET /docs` in the API below, and
@@ -207,7 +208,7 @@ was refused if it was, the best similarity and which files were cited. Answer te
 `log` shows the latest ones (`-n 50`, `--since 2026-11-01`), `log --refused` only the refusals, which is the quickest way
 to see what people ask that the documents don't cover, and `log --export reports/log-candidates.json`
 writes those in the `questions.json` format. The latest refusals are also under "Reddedilen sorular"
-in the web UI sidebar. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it off and
+in the web UI sidebar, with a button to download the same candidates file. `log --clear` empties it, `MIRAS_QUERY_LOG=0` turns it off and
 `ingest --rebuild` leaves it alone.
 
 The tests use a fake backend instead of the models, so they also run on GitHub Actions on every
@@ -471,7 +472,8 @@ cevabı değiştiriyor; eski cevaba verilen oy ayrı olarak kalıyor.
 
 `ask-batch` bir dosyanın her satırını ayrı bir soru olarak soruyor (boş ve `#` ile başlayan satırlar
 atlanıyor, `-` verilirse standart girdiden okuyor) ve her cevap için `ask --json` biçiminde bir JSON
-satırı yazıyor. Satırlar arasında konu taşınmıyor.
+satırı yazıyor. Satırlar arasında konu taşınmıyor. Sonda kaç tanesinin reddedildiğini ve kaçının
+önbellekten geldiğini stderr'e yazıyor.
 
 Betikler için `ask -` soruyu standart girdiden okuyor; `search`, `docs`, `log`, `status`, `doctor`, `config` ve `feedback` da `--json` alıyor. `search --json` ve
 `docs --json` aşağıdaki API'deki `POST /search` ve `GET /docs` ile aynı biçimde; `doctor --json`
@@ -531,7 +533,7 @@ reddedildiyse sebebi, en iyi benzerlik ve atıf yapılan dosyalar. Cevap metinle
 son soruları gösteriyor (`-n 50`, `--since 2026-11-01`), `log --refused` yalnızca reddedilenleri; dokümanların kapsamadığı
 ne sorulduğunu görmenin en hızlı yolu bu. `log --export reports/log-adaylar.json` bunları
 `questions.json` biçiminde yazıyor. Son reddedilenler web arayüzünde kenar çubuğundaki "Reddedilen
-sorular" bölümünde de görünüyor. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
+sorular" bölümünde de görünüyor; aynı aday dosyasını indirmek için bir düğme de var. `log --clear` boşaltıyor, `MIRAS_QUERY_LOG=0` kapatıyor,
 `ingest --rebuild` dokunmuyor.
 
 Testler modeller yerine sahte bir arka uç kullandığı için her push'ta GitHub Actions'ta da
