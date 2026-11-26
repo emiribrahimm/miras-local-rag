@@ -219,6 +219,10 @@ weight. They only change the current browser session (the loaded models and the 
 which makes it easy to see what a different threshold would do to a question before changing the
 default. Answers given with changed settings say so under the answer and in the exports.
 
+Settings can also go in a `miras.toml` next to `main.py` (copy `miras.toml.example`, which lists
+every one; `MIRAS_CONFIG` points somewhere else). Relative paths in it are relative to the file,
+an unknown key stops at startup instead of being ignored, and `MIRAS_*` env vars still win over it.
+
 Settings live in `miras/config.py` and can be overridden with `MIRAS_*` env vars, e.g.
 `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`, `MIRAS_BM25_WEIGHT`,
 `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_QUERY_LOG` or `MIRAS_DOCS_DIR`. If you change the
@@ -545,6 +549,11 @@ Web arayüzünde kenar çubuğundaki "Arama ayarları" bölümünde `top_k`, eş
 kaydırıcılar var. Yalnızca o tarayıcı oturumunu değiştiriyorlar (yüklü modeller ve indeks
 paylaşılıyor); varsayılanı değiştirmeden önce farklı bir eşiğin bir soruya ne yapacağını görmek
 kolaylaşıyor. Değişmiş ayarlarla verilen cevaplar bunu cevabın altında ve dışa aktarımda belirtiyor.
+
+Ayarlar `main.py`'nin yanındaki bir `miras.toml` dosyasına da yazılabiliyor (`miras.toml.example`'ı
+kopyalayın, hepsi orada; başka bir dosya için `MIRAS_CONFIG`). İçindeki göreli yollar dosyanın
+klasörüne göre çözülüyor, tanınmayan bir anahtar görmezden gelinmek yerine açılışta hata veriyor,
+`MIRAS_*` ortam değişkenleri yine dosyadan önce geliyor.
 
 Ayarlar `miras/config.py` içinde; `MIRAS_CHAT_MODEL`, `MIRAS_TOP_K`, `MIRAS_MIN_SIMILARITY`,
 `MIRAS_BM25_WEIGHT`, `MIRAS_FOLLOWUP_MIN_SIMILARITY`, `MIRAS_ANSWER_CACHE`, `MIRAS_QUERY_LOG`, `MIRAS_DOCS_DIR` gibi ortam değişkenleriyle değiştirilebiliyor. Embedding modelini değiştirirseniz
