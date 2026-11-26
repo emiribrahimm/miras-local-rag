@@ -165,16 +165,21 @@ def cmd_ask_batch(args: argparse.Namespace, settings: Settings) -> None:
     assistant = _assistant(settings)
     docs = _docs(assistant, args.doc)
     out = args.out.open("w", encoding="utf-8") if args.out else sys.stdout
+    refused = cached = 0
     try:
         for number, question in enumerate(questions, start=1):
             _status(f"{number}/{len(questions)} {question[:60]}")
             # Sorular birbirinden bağımsız; önceki satırın konusu taşınmaz.
             answer = assistant.ask(question, refresh=args.refresh, docs=docs)
+            refused += answer.refused
+            cached += answer.cached
             print(json.dumps(answer_json(question, answer, settings), ensure_ascii=False),
                   file=out, flush=True)
     finally:
         if args.out:
             out.close()
+    # Özet stderr'e: stdout'a yazılan JSONL bozulmasın.
+    _status(f"{len(questions)} soru: {refused} reddedildi, {cached} önbellekten")
     if args.out:
         print(f"{len(questions)} cevap -> {args.out}")
 

@@ -260,6 +260,7 @@ def test_ask_batch_writes_one_json_line_per_question(run, backend, tmp_path):
     questions.write_text("# deneme\nEfes nerede?\n\n  Pizza hamuru tarifi nedir?\n", encoding="utf-8")
     code, out, err = run("ask-batch", str(questions), "--out", str(tmp_path / "cevaplar.jsonl"))
     assert code == 0 and "2 cevap ->" in out and "2/2 Pizza" in err
+    assert "2 soru: 1 reddedildi, 0 önbellekten" in err
     lines = (tmp_path / "cevaplar.jsonl").read_text(encoding="utf-8").splitlines()
     rows = [json.loads(line) for line in lines]
     assert [r["question"] for r in rows] == ["Efes nerede?", "Pizza hamuru tarifi nedir?"]
