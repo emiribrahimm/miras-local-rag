@@ -534,3 +534,16 @@ def test_ask_reads_the_question_from_stdin(run, backend, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("  \n"))
     code, _, err = run("ask", "-")
     assert code == 1 and "Standart girdide soru yok." in err
+
+
+def test_log_since_filters_by_date(run, store):
+    import json
+
+    run("ask", "Pizza hamuru tarifi nedir?")
+    store.conn.execute("UPDATE queries SET created = 0")  # 1970'e çek
+    store.conn.commit()
+    run("ask", "Efes nerede?")
+    data = json.loads(run("log", "--json", "--since", "2000-01-01")[1])
+    assert [r["question"] for r in data["rows"]] == ["Efes nerede?"] and data["total"] == 2
+    code, _, err = run("log", "--since", "dün")
+    assert code == 1 and "--since tarih olmalı" in err

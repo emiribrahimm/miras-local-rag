@@ -201,13 +201,16 @@ class Store:
             self.conn.execute("DELETE FROM queries WHERE id NOT IN (SELECT id FROM queries "
                               "ORDER BY id DESC LIMIT ?)", (MAX_LOGGED_QUERIES,))
 
-    def query_rows(self, refused: bool = False, limit: int | None = None) -> list[dict]:
-        """Günlükteki sorular, yeniden eskiye; `refused` ise yalnızca reddedilenler."""
+    def query_rows(self, refused: bool = False, limit: int | None = None,
+                   since: float | None = None) -> list[dict]:
+        """Günlükteki sorular, yeniden eskiye; `refused` ise yalnızca reddedilenler, `since`
+        (Unix zamanı) verilirse yalnızca o andan sonrakiler."""
         query = ("SELECT created, question, carried, docs, refusal_reason, top_score, cited, cached, "
-                 "chat_model FROM queries")
+                 "chat_model FROM queries WHERE created >= ?")
         if refused:
-            query += " WHERE refusal_reason IS NOT NULL"
-        cursor = self.conn.execute(query + " ORDER BY id DESC LIMIT ?", (-1 if limit is None else limit,))
+            query += " AND refusal_reason IS NOT NULL"
+        cursor = self.conn.execute(query + " ORDER BY id DESC LIMIT ?",
+                                   (since or 0.0, -1 if limit is None else limit))
         names = [d[0] for d in cursor.description]
         rows = [dict(zip(names, row)) for row in cursor]
         for row in rows:

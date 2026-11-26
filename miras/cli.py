@@ -550,11 +550,18 @@ def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
     if args.clear:
         print(f"Günlükten {store.clear_queries()} soru silindi.")
         return
+    since = None
+    if args.since:
+        try:
+            since = datetime.fromisoformat(args.since).timestamp()
+        except ValueError:
+            raise CommandError(f"--since tarih olmalı (2026-11-26 ya da 2026-11-26T14:00), "
+                               f"'{args.since}' verildi.") from None
     total, refused = store.query_counts()
     if args.json:
         rows = [{**row, "created": datetime.fromtimestamp(row["created"]).isoformat(timespec="seconds"),
                  "carried": list(row["carried"]), "docs": list(row["docs"]), "cited": list(row["cited"])}
-                for row in store.query_rows(refused=args.refused, limit=args.n)]
+                for row in store.query_rows(refused=args.refused, limit=args.n, since=since)]
         print(json.dumps({"total": total, "refused": refused, "rows": rows}, ensure_ascii=False, indent=2))
         return
     if not total:
@@ -562,7 +569,7 @@ def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
         print(f"Günlükte soru yok{state}.")
         return
     print(f"Günlükte {total} soru, {refused} tanesi reddedildi.")
-    for row in store.query_rows(refused=args.refused, limit=args.n):
+    for row in store.query_rows(refused=args.refused, limit=args.n, since=since):
         when = datetime.fromtimestamp(row["created"])
         mark = "✗" if row["refusal_reason"] else "✓"
         extra = []
@@ -579,7 +586,7 @@ def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
         print(f"{when:%d.%m %H:%M}  {mark} {row['top_score']:.2f}  {row['question']}"
               + (f"  ({'; '.join(extra)})" if extra else ""))
     if args.export:
-        candidates = refused_candidates(store.query_rows(refused=True))
+        candidates = refused_candidates(store.query_rows(refused=True, since=since))
         args.export.parent.mkdir(parents=True, exist_ok=True)
         args.export.write_text(json.dumps(candidates, ensure_ascii=False, indent=2) + "\n",
                                encoding="utf-8")
@@ -833,6 +840,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="Reddedilen soruları eval adayı olarak JSON'a yaz")
     p.add_argument("--clear", action="store_true", help="Günlüğü boşalt (oylar ve önbellek kalır)")
     p.add_argument("--json", action="store_true", help="JSON olarak yaz")
+    p.add_argument("--since", metavar="TARİH", help="Yalnızca bu tarihten sonrakiler, ör. 2026-11-26")
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
