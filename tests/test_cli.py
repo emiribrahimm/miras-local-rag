@@ -467,3 +467,20 @@ def test_status_json(run, settings):
     assert (data["docs"], data["chunks"], data["rebuild_needed"]) == (2, 3, False)
     assert data["pending"] == {"changed": ["ani.md"], "missing": []}
     assert data["query_log"] == {"enabled": True, "total": 0, "refused": 0}
+
+
+def test_doctor_json_keeps_the_exit_code(run, monkeypatch, capsys):
+    import json
+
+    from miras import doctor
+
+    monkeypatch.setattr(doctor, "check_sdk", lambda: doctor.Check("error", "foundry-local-sdk", "yok"))
+    with pytest.raises(SystemExit) as exit_info:
+        run("doctor", "--json")
+    assert exit_info.value.code == 1 and json.loads(capsys.readouterr().out)["ok"] is False
+    monkeypatch.setattr(doctor, "check_sdk", lambda: doctor.Check("ok", "foundry-local-sdk", "kurulu"))
+    monkeypatch.setattr(doctor, "check_models", lambda: doctor.Check("ok", "modeller", "var"))
+    code, out, _ = run("doctor", "--json")
+    data = json.loads(out)
+    assert code == 0 and data["ok"] is True
+    assert {"level": "ok", "name": "foundry-local-sdk", "message": "kurulu"} in data["checks"]

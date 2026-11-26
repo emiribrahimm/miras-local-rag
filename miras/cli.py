@@ -610,9 +610,15 @@ DOCTOR_MARKS = {"ok": "✓", "warn": "!", "error": "✗"}
 def cmd_doctor(args: argparse.Namespace, settings: Settings) -> None:
     """Kurulum kontrolleri; hata varsa komut 1 ile biter (betiklerde kullanılabilsin)."""
     checks = doctor.run_checks(settings)
+    errors = sum(c.level == "error" for c in checks)
+    if args.json:
+        print(json.dumps({"ok": not errors, "checks": [dataclasses.asdict(c) for c in checks]},
+                         ensure_ascii=False, indent=2))
+        if errors:
+            raise SystemExit(1)
+        return
     for check in checks:
         print(f"{DOCTOR_MARKS[check.level]} {check.name:<18} {check.message}")
-    errors = sum(c.level == "error" for c in checks)
     warnings = sum(c.level == "warn" for c in checks)
     if errors:
         raise CommandError(f"{errors} hata, {warnings} uyarı.")
@@ -796,6 +802,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_status)
 
     p = sub.add_parser("doctor", help="Kurulumu denetle: SDK, modeller, dokümanlar, indeks (model yüklemez)")
+    p.add_argument("--json", action="store_true", help="JSON olarak yaz (hata varsa yine 1 ile biter)")
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("docs", help="İndeksteki dokümanları listele (model çağırmaz)")
