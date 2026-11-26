@@ -282,11 +282,23 @@ def test_ask_batch_reads_stdin_and_rejects_empty_files(run, monkeypatch, tmp_pat
 def test_config_shows_where_each_setting_comes_from(run, monkeypatch):
     monkeypatch.setenv("MIRAS_TOP_K", "2")
     monkeypatch.delenv("MIRAS_CHAT_DEVICE", raising=False)
-    lines = {line.split()[0]: line for line in run("--model", "baska-model", "config")[1].splitlines()}
+    lines = {line.split()[0]: line for line in run("--model", "baska-model", "config")[1].splitlines() if line}
     assert "baska-model" in lines["chat_model"] and lines["chat_model"].endswith("komut satırı")
     assert lines["top_k"].endswith("MIRAS_TOP_K ile ezildi")
     assert lines["chat_device"].endswith("varsayılan (MIRAS_CHAT_DEVICE)")
     assert lines["temperature"].endswith("varsayılan (yalnızca config.py)")
+
+
+def test_config_names_the_config_file(run, monkeypatch, tmp_path):
+    from miras import config
+
+    monkeypatch.delenv("MIRAS_BM25_WEIGHT", raising=False)
+    monkeypatch.setattr(config, "CONFIG_PATH", tmp_path / "miras.toml")
+    monkeypatch.setattr(config, "FILE_VALUES", {"bm25_weight": "0.3"})
+    out = run("config")[1]
+    lines = {line.split()[0]: line for line in out.splitlines() if line}
+    assert lines["bm25_weight"].endswith("miras.toml ile ezildi")
+    assert out.rstrip().endswith(f"Ayar dosyası: {tmp_path / 'miras.toml'} (okundu; başka bir dosya için MIRAS_CONFIG)")
 
 
 def test_chat_kaynak_prints_full_chunks_of_last_answer(chat, backend):

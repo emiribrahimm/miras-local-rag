@@ -15,6 +15,7 @@ from pathlib import Path
 
 from . import doctor, evaluation
 from .backends import BackendError, FoundryBackend
+from . import config
 from .config import ENV_FIELDS, ROOT, SETTINGS, Settings, env_name
 from .export import answer_json, conversation_markdown, search_json
 from .feedback import eval_candidates, refused_candidates
@@ -702,14 +703,17 @@ def cmd_remove_doc(args: argparse.Namespace, settings: Settings) -> None:
 
 
 def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
-    """Geçerli ayarlar ve nereden geldikleri (config.py, MIRAS_* ya da komut satırı)."""
+    """Geçerli ayarlar ve nereden geldikleri (config.py, miras.toml, MIRAS_* ya da komut satırı)."""
     rows = []
+    file_name = config.CONFIG_PATH.name
     for field in dataclasses.fields(settings):
         value = getattr(settings, field.name)
         if value != getattr(SETTINGS, field.name):
             origin = "komut satırı"
         elif field.name in ENV_FIELDS and env_name(field.name) in os.environ:
             origin = f"{env_name(field.name)} ile ezildi"
+        elif field.name in config.FILE_VALUES:
+            origin = f"{file_name} ile ezildi"
         elif field.name in ENV_FIELDS:
             origin = f"varsayılan ({env_name(field.name)})"
         else:
@@ -721,6 +725,8 @@ def cmd_config(args: argparse.Namespace, settings: Settings) -> None:
         return
     for name, value, origin in rows:
         print(f"{name:<24} {str(value):<28} {origin}")
+    state = "okundu" if config.FILE_VALUES else ("boş" if config.CONFIG_PATH.is_file() else "yok")
+    print(f"\nAyar dosyası: {config.CONFIG_PATH} ({state}; başka bir dosya için MIRAS_CONFIG)")
 
 
 def cmd_cache(args: argparse.Namespace, settings: Settings) -> None:
