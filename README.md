@@ -151,6 +151,10 @@ given to the old answer is kept separately.
 `#` are skipped, `-` reads from stdin) and writes one JSON object per answer, in the same shape as
 `ask --json`. Questions don't carry topics from one line to the next.
 
+For scripts, `search`, `docs`, `log`, `status` and `doctor` take `--json` too. `search --json` and
+`docs --json` have the same shape as `POST /search` and `GET /docs` in the API below, and
+`doctor --json` still exits with 1 when a check fails.
+
 `serve` starts a small HTTP API (standard library only, no extra dependency) so other tools can use
 the assistant. It listens on `127.0.0.1:8765` by default (`--host`, `--port`). With `--token` (or
 `MIRAS_API_TOKEN`) every endpoint except `/health` needs `Authorization: Bearer <token>`; without
@@ -466,6 +470,10 @@ cevabı değiştiriyor; eski cevaba verilen oy ayrı olarak kalıyor.
 `ask-batch` bir dosyanın her satırını ayrı bir soru olarak soruyor (boş ve `#` ile başlayan satırlar
 atlanıyor, `-` verilirse standart girdiden okuyor) ve her cevap için `ask --json` biçiminde bir JSON
 satırı yazıyor. Satırlar arasında konu taşınmıyor.
+
+Betikler için `search`, `docs`, `log`, `status` ve `doctor` da `--json` alıyor. `search --json` ve
+`docs --json` aşağıdaki API'deki `POST /search` ve `GET /docs` ile aynı biçimde; `doctor --json`
+bir kontrol başarısız olunca yine 1 ile bitiyor.
 
 `serve` başka araçlar da asistanı kullanabilsin diye küçük bir HTTP API başlatıyor (yalnızca
 standart kütüphane, ek bağımlılık yok). Varsayılan olarak `127.0.0.1:8765` dinliyor (`--host`,
