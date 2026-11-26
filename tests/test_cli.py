@@ -446,3 +446,14 @@ def test_docs_json(run):
     data = json.loads(run("docs", "--json")[1])
     assert [d["filename"] for d in data["docs"]] == ["efes.md", "gobeklitepe.md"]
     assert data["docs"][0]["aliases"] == ["Ephesos", "Ephesus"] and data["docs"][1]["chunks"] == 2
+
+
+def test_log_json(run):
+    import json
+
+    run("ask", "Pizza hamuru tarifi nedir?")
+    data = json.loads(run("log", "--json")[1])
+    assert data["total"] == 1 and data["refused"] == 1
+    row = data["rows"][0]
+    assert row["question"] == "Pizza hamuru tarifi nedir?" and row["refusal_reason"] == "low_similarity"
+    assert row["created"][4] == "-" and row["cited"] == [] and row["cached"] is False

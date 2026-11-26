@@ -525,6 +525,12 @@ def cmd_log(args: argparse.Namespace, settings: Settings) -> None:
         print(f"Günlükten {store.clear_queries()} soru silindi.")
         return
     total, refused = store.query_counts()
+    if args.json:
+        rows = [{**row, "created": datetime.fromtimestamp(row["created"]).isoformat(timespec="seconds"),
+                 "carried": list(row["carried"]), "docs": list(row["docs"]), "cited": list(row["cited"])}
+                for row in store.query_rows(refused=args.refused, limit=args.n)]
+        print(json.dumps({"total": total, "refused": refused, "rows": rows}, ensure_ascii=False, indent=2))
+        return
     if not total:
         state = "" if settings.query_log else " (MIRAS_QUERY_LOG=0, günlük kapalı)"
         print(f"Günlükte soru yok{state}.")
@@ -770,6 +776,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--export", type=Path, metavar="DOSYA",
                    help="Reddedilen soruları eval adayı olarak JSON'a yaz")
     p.add_argument("--clear", action="store_true", help="Günlüğü boşalt (oylar ve önbellek kalır)")
+    p.add_argument("--json", action="store_true", help="JSON olarak yaz")
     p.set_defaults(func=cmd_log)
 
     p = sub.add_parser("status", help="İndeks, önbellek ve bekleyen değişiklikler (model çağırmaz)")
