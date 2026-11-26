@@ -312,3 +312,15 @@ def test_refused_questions_are_listed_in_the_sidebar(app):
     assert len(refused) == 1 and "_(kapıda, " in refused[0]
     assert not any("Efes nerede?" in m.value for m in app.sidebar.markdown)
     assert any(b.label == "Eval adayı olarak indir (.json)" for b in app.sidebar.get("download_button"))
+
+
+def test_index_changed_elsewhere_is_picked_up(app, store, backend, settings):
+    from miras.ingest import ingest
+
+    (settings.docs_dir / "ani.md").write_text("---\ntitle: Ani\n---\n\nAni Kars ilindedir.", encoding="utf-8")
+    ingest(store, backend, settings)  # arayüz açıkken CLI'dan
+    app.run()
+    assert not app.exception
+    assert "- Ani (1 parça)" in app.sidebar.markdown[1].value
+    app.chat_input[0].set_value("Ani hangi ilde?").run()
+    assert any("ani.md" in e.label or "[K1] Ani" in e.label for e in app.expander)

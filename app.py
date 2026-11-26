@@ -43,6 +43,18 @@ def load_assistant() -> Assistant:
     return Assistant(backend, retriever, SETTINGS, cache=store)
 
 
+def refresh_if_stale(assistant: Assistant) -> None:
+    """İndeks başka bir süreçte (`ingest`, `ingest --watch`, başka bir sekme) değiştiyse aramayı
+    yeniler; yoksa açık arayüz eski parçalarla aramaya devam ederdi."""
+    store = Store(SETTINGS.db_path)
+    try:
+        if assistant.retriever.is_stale(store):
+            assistant.retriever = Retriever(store, assistant.backend.embed_model)
+            st.toast("İndeks güncellenmiş, yeniden yüklendi.")
+    finally:
+        store.close()
+
+
 def reindex(assistant: Assistant) -> tuple[list[str], list[str]]:
     """Doküman klasörünü indeksle eşitler ve aramayı yeni indeksle yeniler; (eklenenler, hatalar)."""
     added: list[str] = []
@@ -320,6 +332,7 @@ st.caption("Türkiye'nin UNESCO Dünya Mirası alanları hakkında bilgi veren s
 
 try:
     assistant = load_assistant()
+    refresh_if_stale(assistant)
 except (BackendError, IndexError_) as err:
     st.error(f"{err}")
     st.info("Kurulum: `uv sync` ve ardından `uv run python main.py ingest`.")
